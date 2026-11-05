@@ -8,7 +8,7 @@ import { postToRoom } from "./switch";
 import { sendMediaToRoom } from "./telegram";
 import { archiveToDrive } from "./drive";
 import { DEFAULT_SETTINGS } from "./seed";
-import { addDays, creativeTextHash, FORMAT_INFO, FORMATS, formatSlot, istIso, istParts, parseClock, PLATFORM_SHORT, postRef } from "./shared";
+import { addDays, creativeTextHash, FORMAT_INFO, FORMATS, formatSlot, istIso, istParts, LAYOUTS, parseClock, PLATFORM_SHORT, postRef } from "./shared";
 import { readStore, updateStore } from "./store";
 import type { Caption, Client, ClientSettings, Platform, Post, PostFormat, ReelScript, Slide, StudioData } from "./types";
 
@@ -82,8 +82,11 @@ export type NewContent = {
   format?: PostFormat;
   platforms?: Platform[];
   scheduledAt?: string;
-  /** "agents" hands the idea to bolo-writer in the work room; "self" means a person writes it in the editor. */
-  mode?: "agents" | "self";
+  /**
+   * "claude" — Claude writes it in the app right away (then media, Brand Guard, Telegram);
+   * "agents" — handed to bolo-writer in the Switch work room; "self" — a person writes it in the editor.
+   */
+  mode?: "claude" | "agents" | "self";
 };
 
 export async function createIdea(input: NewContent): Promise<Post> {
@@ -120,7 +123,10 @@ export async function createIdea(input: NewContent): Promise<Post> {
       note:
         mode === "agents"
           ? `Sent to @${agentName("writer")} in ${client.rooms.work} — the brief and captions appear here when ready`
-          : "New idea — add captions and media, then run Brand Guard",
+          : mode === "claude"
+            ? undefined
+            : "New idea — add captions and media, then run Brand Guard",
+      job: mode === "claude" ? { step: "Claude is writing the brief and captions…", at: nowIso() } : undefined,
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
@@ -157,6 +163,7 @@ export type PostPatch = {
   brief?: string;
   reel?: ReelScript;
   slides?: Slide[];
+  layout?: string;
 };
 
 export function updatePost(id: string, patch: PostPatch) {
@@ -189,6 +196,10 @@ export function updatePost(id: string, patch: PostPatch) {
     if (patch.platforms) post.platforms = patch.platforms;
     if (patch.tag !== undefined) post.tag = patch.tag.trim() ? `#${patch.tag.trim().replace(/^#/, "")}` : post.tag;
     if (patch.brief !== undefined) post.brief = patch.brief.trim() || undefined;
+    if (patch.layout !== undefined) {
+      if (patch.layout && !(patch.layout in LAYOUTS)) throw new WorkflowError(400, `Layout must be ${Object.keys(LAYOUTS).join(", ")}.`);
+      post.layout = patch.layout || undefined;
+    }
     if (patch.reel) post.reel = patch.reel;
     if (patch.slides) post.slides = patch.slides.map((s) => ({ headline: s.headline.trim(), text: s.text?.trim() || undefined }));
     // A format change can leave platforms the new format can't use (e.g. LinkedIn stories)
@@ -322,6 +333,16 @@ async function sendMediaFirst(post: Post, room: string) {
       p?.thread.push({ from: "Telegram", text: `⚠ Preview not attached: ${sent.reason}`, at: nowIso() });
     });
   }
+}
+
+/** Show (or clear, with null) what automatic production is doing right now. */
+export function setJob(id: string, step: string | null, note?: string) {
+  return updateStore((data) => {
+    const p = findPost(data, id);
+    p.job = step ? { step, at: nowIso() } : undefined;
+    if (note !== undefined) p.note = note || undefined;
+    return p;
+  });
 }
 
 /** Status notes for the team and agents in the client's work room (best effort). */

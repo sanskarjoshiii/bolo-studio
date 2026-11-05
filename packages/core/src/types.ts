@@ -68,6 +68,8 @@ export type Post = {
   creative: string;
   /** Text that appears on the creative itself — Brand Guard checks it too. */
   creativeText: string;
+  /** Designed layout for the rendered image (shared.ts LAYOUTS); empty → picked automatically. */
+  layout?: string;
   /** ISO date-time with IST offset. */
   scheduledAt: string;
   tag: string;
@@ -79,6 +81,8 @@ export type Post = {
   reel?: ReelScript;
   /** Carousel slides (slide 1 is the cover). Rendered one PNG per slide. */
   slides?: Slide[];
+  /** Automatic production in progress (Claude writing, rendering, sending) — shown live in the editor. */
+  job?: { step: string; at: string };
   /** Brief from the Strategist (goal, audience, notes) — free text shown to the team. */
   brief?: string;
   checks: CheckResult[];

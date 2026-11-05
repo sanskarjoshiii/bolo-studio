@@ -113,9 +113,65 @@ export const FORMAT_INFO = {
   Reel: { label: "Reel", ratio: "9:16", size: "1080 × 1920 video", platforms: ["instagram", "facebook", "youtube"], video: true },
 } as const satisfies Record<(typeof FORMATS)[number], { label: string; ratio: string; size: string; platforms: readonly string[]; video: boolean }>;
 
+/** Designed layouts for posts, stories and carousel covers (apps/web brand-creative.tsx draws them). */
+export const LAYOUTS = {
+  hero: { label: "Photo hero", hint: "Full-bleed photo, headline over a brand gradient — best with a real photo" },
+  split: { label: "Split", hint: "Photo on top, brand panel with the headline below" },
+  editorial: { label: "Editorial", hint: "Light, premium: big serif headline and an arch-framed photo" },
+  offer: { label: "Offer", hint: "Price badge front and centre — launches, offers, price drops" },
+  bold: { label: "Bold type", hint: "Huge headline with one highlighted word — tips, facts, hooks" },
+  festive: { label: "Festive", hint: "Festival greeting: glow, rays and a rangoli ring" },
+} as const;
+export type Layout = keyof typeof LAYOUTS;
+export const LAYOUT_IDS = Object.keys(LAYOUTS) as Layout[];
+
+/** Layout when nobody picked one: festival → festive, photo → hero, a price → offer, else editorial. */
+export function autoLayout(p: { title: string; creativeText: string; layout?: string }, hasPhoto: boolean): Layout {
+  if (p.layout && p.layout in LAYOUTS) return p.layout as Layout;
+  const text = `${p.title} ${p.creativeText}`;
+  if (/(diwali|deepavali|navratri|dussehra|ganesh|holi|eid|christmas|new year|shubh|padwa|gudi|sankranti|festive)/i.test(text) && !/₹/.test(text)) return "festive";
+  if (hasPhoto) return "hero";
+  if (/₹|onwards/i.test(p.creativeText)) return "offer";
+  return "editorial";
+}
+
 export const PLATFORM_SHORT: Record<string, string> = {
   instagram: "IG",
   facebook: "FB",
   linkedin: "LinkedIn",
   youtube: "YouTube",
 };
+
+export type BrandTokens = {
+  name: string;
+  kicker: string;
+  primary: string;
+  accent: string;
+  bg: string;
+  text: string;
+  fontHead: string;
+  fontBody: string;
+  radius: number;
+};
+
+/** Design tokens from the client's tokens.json, with fallbacks from its avatar colours. */
+export function brandTokens(client: { name: string; short: string; products: string[]; mark: { bg: string; fg: string }; files: { name: string; content: string }[] }): BrandTokens {
+  let t: Record<string, string | number> = {};
+  try {
+    t = JSON.parse(client.files.find((f) => f.name === "tokens.json")?.content ?? "{}");
+  } catch {
+    t = {};
+  }
+  const str = (k: string, d: string) => (typeof t[k] === "string" && t[k] ? String(t[k]) : d);
+  return {
+    name: client.name,
+    kicker: client.products[0] ?? client.short,
+    primary: str("primary", client.mark.bg),
+    accent: str("accent", client.mark.fg),
+    bg: str("bg", "#ffffff"),
+    text: str("text", "#111111"),
+    fontHead: str("fontHead", "Inter"),
+    fontBody: str("fontBody", "Inter"),
+    radius: typeof t.radius === "number" ? t.radius : 16,
+  };
+}

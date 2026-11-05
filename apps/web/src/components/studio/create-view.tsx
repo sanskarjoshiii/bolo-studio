@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "motion/react";
-import { Bot, Clapperboard, GalleryHorizontalEnd, HardDrive, Image as ImageIcon, Loader2, Mic, PenLine, Smartphone, Upload, X } from "lucide-react";
+import { Bot, Clapperboard, GalleryHorizontalEnd, HardDrive, Image as ImageIcon, Loader2, Mic, PenLine, Smartphone, Sparkles, Upload, X } from "lucide-react";
 import type { Client, DriveFile, Platform, Post, PostFormat } from "@bolo/core";
 import { FORMAT_INFO, FORMATS, istIso, istParts } from "@bolo/core/shared";
 import { api } from "./hooks";
@@ -46,7 +46,8 @@ export function CreateView({
   );
   const [platforms, setPlatforms] = useState<Platform[]>(allowedPlatforms);
   const [when, setWhen] = useState(toLocal(defaultSlot));
-  const [mode, setMode] = useState<"agents" | "self">(agentsRoomKnown ? "agents" : "self");
+  const [mode, setMode] = useState<"claude" | "agents" | "self">("claude");
+  const [autoSend, setAutoSend] = useState(true);
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [localFiles, setLocalFiles] = useState<File[]>([]);
   const [picker, setPicker] = useState(false);
@@ -86,6 +87,7 @@ export function CreateView({
         platforms,
         scheduledAt: istIso(d, hh * 60 + mm),
         mode,
+        autoSend,
         driveFileIds: driveFiles.map((f) => f.id),
       });
       for (const f of localFiles) {
@@ -210,17 +212,32 @@ export function CreateView({
           </Section>
 
           <Section n={5} title="Who writes it?">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 lg:grid-cols-3">
+              <ModeCard
+                on={mode === "claude"}
+                onClick={() => setMode("claude")}
+                icon={Sparkles}
+                title="Claude writes it now"
+                badge="Recommended"
+                body={`Claude reads ${client.name}'s Brand Kit and writes the brief, captions${format === "Carousel" ? ", slides" : format === "Reel" ? ", reel scenes" : ""}; Bolo renders the ${format === "Reel" ? "video" : "image"} — about a minute.`}
+              />
               <ModeCard
                 on={mode === "agents"}
                 onClick={() => setMode("agents")}
                 icon={Bot}
-                title="AI agents"
-                body={`bolo-writer writes the brief and captions in ${client.rooms.work}, bolo-designer makes the visuals and sends it for approval.`}
+                title="Switch agents"
+                body={`bolo-writer and bolo-designer pick it up in ${client.rooms.work} — you and the team can chat with them there.`}
                 warn={agentsRoomKnown ? undefined : "The Publisher isn't in the work room yet — see Connections."}
               />
-              <ModeCard on={mode === "self"} onClick={() => setMode("self")} icon={PenLine} title="I'll write it" body="Opens the editor: captions, slides or reel scenes, media — then send it for approval yourself." />
+              <ModeCard on={mode === "self"} onClick={() => setMode("self")} icon={PenLine} title="I'll write it" body="Opens the editor: captions, slides or reel scenes, media — then send it yourself." />
             </div>
+            {mode === "claude" && (
+              <label className="mt-3 flex items-center gap-2 text-[12.5px] text-white/85">
+                <input type="checkbox" checked={autoSend} onChange={(e) => setAutoSend(e.target.checked)} className="size-4 accent-lime" />
+                Send it to {client.rooms.approvals} automatically when Brand Guard passes
+                <span className="text-fog">(off: you review it first)</span>
+              </label>
+            )}
           </Section>
 
           <ErrorNote error={error} onClose={() => setError(null)} />
@@ -230,7 +247,7 @@ export function CreateView({
               disabled={busy || !text.trim() || !platforms.length}
               className="flex items-center gap-2 rounded-xl bg-lime px-6 py-3 text-[14px] font-medium text-night hover:brightness-95 disabled:opacity-40"
             >
-              {busy && <Loader2 className="size-4 animate-spin" />} Create {format.toLowerCase()}
+              {busy && <Loader2 className="size-4 animate-spin" />} {mode === "claude" ? `Create ${format.toLowerCase()} with Claude` : `Create ${format.toLowerCase()}`}
             </button>
             <span className="text-[12px] text-fog">{!text.trim() ? "Add the idea first" : !platforms.length ? "Pick at least one platform" : "Nothing is posted until the client approves."}</span>
           </div>
@@ -271,11 +288,12 @@ function Section({ n, title, hint, children }: { n: number; title: string; hint?
   );
 }
 
-function ModeCard({ on, onClick, icon: Icon, title, body, warn }: { on: boolean; onClick: () => void; icon: typeof Bot; title: string; body: string; warn?: string }) {
+function ModeCard({ on, onClick, icon: Icon, title, body, warn, badge }: { on: boolean; onClick: () => void; icon: typeof Bot; title: string; body: string; warn?: string; badge?: string }) {
   return (
     <button onClick={onClick} className={cn("rounded-xl p-4 text-left ring-1 transition", on ? "bg-lime/10 ring-lime/60" : "bg-white/[0.035] ring-white/[0.07] hover:bg-white/[0.06]")}>
       <p className="flex items-center gap-2 text-[13.5px] font-medium">
         <Icon className={cn("size-4", on ? "text-lime" : "text-white/70")} /> {title}
+        {badge && <span className="ml-auto rounded bg-lime/15 px-1.5 py-0.5 text-[10px] text-lime">{badge}</span>}
       </p>
       <p className="mt-1.5 text-[12px] leading-relaxed text-white/70">{body}</p>
       {warn && <p className="mt-2 text-[11.5px] text-amber-200/90">{warn}</p>}

@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, PenLine } from "lucide-react";
+import { Loader2, MoreHorizontal, PenLine } from "lucide-react";
 import type { Client, Post } from "@bolo/core";
 import { formatTime, istParts } from "@bolo/core/shared";
 import { ClientMark } from "./controls";
@@ -67,10 +67,16 @@ export function PostCard({ post, client, selected, onClick }: { post: Post; clie
 
       <div className="mt-2 flex items-center justify-between gap-1 px-1 pb-0.5">
         <span className="truncate rounded-md bg-black/25 px-1.5 py-0.5 text-[10px] text-white/70">{post.tag}</span>
-        <span className={cn("inline-flex shrink-0 items-center gap-1 text-[10px]", s.text)}>
-          <span className={cn("size-1.5 rounded-full", s.dot)} />
-          {s.short}
-        </span>
+        {post.job ? (
+          <span className="inline-flex shrink-0 items-center gap-1 text-[10px] text-lime">
+            <Loader2 className="size-2.5 animate-spin" /> Claude
+          </span>
+        ) : (
+          <span className={cn("inline-flex shrink-0 items-center gap-1 text-[10px]", s.text)}>
+            <span className={cn("size-1.5 rounded-full", s.dot)} />
+            {s.short}
+          </span>
+        )}
       </div>
     </button>
   );

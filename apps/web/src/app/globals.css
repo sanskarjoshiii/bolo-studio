@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument), ui-serif, Georgia, serif;
+  --font-brand: var(--font-playfair), ui-serif, Georgia, serif;
+
+  /* Landing — light, misty green */
+  --color-ink: #0f1411;
+  --color-muted: #5e6762;
+  --color-paper: #f3f6f5;
+  --color-mist: #e8edeb;
+  --color-line: #e1e7e4;
+  --color-forest: #1f3b26;
+  --color-forest-2: #2e5236;
+  --color-leaf: #6f9b6c;
+  --color-sage: #a8c3a1;
+
+  /* Dashboard — deep green glass */
+  --color-night: #07120d;
+  --color-night-2: #0c1d16;
+  --color-lime: #d9f24b;
+  --color-fog: #8fa197;
+
+  /* Demo client brand (brand-kits/pushpam-demo/tokens.json) */
+  --color-pushpam: #1f3a5f;
+  --color-pushpam-gold: #c9a227;
+  --color-pushpam-cream: #f7f5f0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-mist);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* Headline: sans with an italic serif accent, as in the reference */
+.em {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}

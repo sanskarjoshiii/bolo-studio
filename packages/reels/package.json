@@ -1,0 +1,27 @@
+{
+  "name": "@bolo/reels",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Renders brand reels (1080x1920 MP4) with Remotion and Sarvam AI voiceover.",
+  "exports": {
+    ".": "./src/render.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@bolo/core": "*",
+    "@remotion/bundler": "4.0.540",
+    "@remotion/google-fonts": "4.0.540",
+    "@remotion/renderer": "4.0.540",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "remotion": "4.0.540"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "typescript": "^5"
+  }
+}

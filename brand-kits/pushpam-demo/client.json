@@ -1,0 +1,12 @@
+{
+  "name": "Pushpam Infra",
+  "short": "Pushpam",
+  "sector": "Real estate · Pune",
+  "mark": { "bg": "#1F3A5F", "fg": "#C9A227", "font": "brand" },
+  "rooms": { "work": "#pushpam-work", "approvals": "Pushpam × 7P Approvals" },
+  "channels": [
+    { "platform": "instagram", "handle": "@pushpaminfra", "postizIntegrationId": "" },
+    { "platform": "facebook", "handle": "Pushpam Infra", "postizIntegrationId": "" },
+    { "platform": "linkedin", "handle": "Pushpam Infra Pvt Ltd", "postizIntegrationId": "" }
+  ]
+}

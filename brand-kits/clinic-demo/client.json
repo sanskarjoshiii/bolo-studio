@@ -1,0 +1,12 @@
+{
+  "name": "Sunrise Eye Clinic",
+  "short": "Sunrise",
+  "sector": "Healthcare · Kothrud",
+  "mark": { "bg": "#0E7C7B", "fg": "#FFFFFF" },
+  "rooms": { "work": "#clinic-work", "approvals": "Clinic × 7P Approvals" },
+  "channels": [
+    { "platform": "instagram", "handle": "@sunriseeyeclinic", "postizIntegrationId": "" },
+    { "platform": "facebook", "handle": "Sunrise Eye Clinic", "postizIntegrationId": "" },
+    { "platform": "youtube", "handle": "Sunrise Eye Care", "postizIntegrationId": "" }
+  ]
+}

@@ -14,13 +14,15 @@ Switch Console**. Each missing piece shows on **Studio → Connections** with it
 | Area | State |
 |---|---|
 | Create any content — Post · Carousel · Story · Reel (composer page) | ✅ Built, e2e-tested in a real browser |
+| **Claude writes it** — idea → Claude (Brand Kit) → media → Brand Guard → Telegram, automatically | ✅ Verified live: post 31 s, carousel 42 s (7 slides), Marathi reel with Sarvam voice |
 | Editor — captions per language, carousel slides, reel/story scenes, live phone preview | ✅ |
-| Media — brand-template PNGs (post / story / each slide), reel & story MP4 (Remotion), uploads | ✅ Verified renders |
+| Media — 6 designed layouts (hero, split, editorial, offer, bold, festive) from tokens.json with reference photos placed in; carousel cover / numbered inner slides / CTA slide; Claude picks the layout | ✅ Verified renders |
+| Reels — kinetic word-by-word text, swipe transitions, moving backgrounds, Ken Burns on photos, count-up price badge, karaoke subtitles, animated end card, optional `brand-kits/<client>/music.mp3` | ✅ Verified (31 s Marathi reel with Sarvam voice) |
 | Brand Guard — auto-fixes before rendering, blocks real problems, stale-media check | ✅ |
-| Telegram approval — package via Switch + **actual media** via Bot API, `approve #ref` / `change #ref:` | ✅ Text + approval verified live · media needs `TELEGRAM_BOT_TOKEN` |
+| Telegram approval — package via Switch + **actual media** via Bot API, `approve #ref` / `change #ref:` | ✅ Text + approval verified live · bot token set, media upload to be confirmed on the first real post |
 | Publishing — Postiz (Instagram post/story, Facebook, LinkedIn carousel, YouTube) | 🟡 Built + unit-tested · needs Postiz running and keys |
 | Google Drive — references in Create/editor, archive of approved media | 🟡 Built + unit-tested · needs OAuth client + Connect |
-| Voiceover — Sarvam, per scene, synced subtitles | 🟡 Built · needs `SARVAM_API_KEY` (silent reels verified) |
+| Voiceover — Sarvam, per scene, synced subtitles | ✅ Verified live (32 s Marathi reel, voice + subtitles) |
 | Content agents — `bolo-writer`, `bolo-designer` (Claude Code in Switch) + `bolo` CLI | 🟡 CLI + workspaces ready · agents to be created in Switch Console |
 | Login, roles, team, approver-only approvals | ✅ |
 | Switch Publisher agent (WebSocket, rooms, identity from Telegram bridge) | ✅ Verified live |
@@ -31,7 +33,7 @@ Switch Console**. Each missing piece shows on **Studio → Connections** with it
 
 ## 2. Verified on 4–5 Nov
 
-- **Tests:** 37 unit tests pass (core 35 + publisher 2). Type checks pass on every package, lint is clean, and the production build passes.
+- **Tests:** 41 unit tests pass (core 39 + publisher 2). Type checks pass on every package, lint is clean, and the production build passes.
 - **Real-browser end to end** (throwaway data, 10/10 pass, no console errors):
   - first-run setup
   - **Carousel:** Create → editor → 3 slides → 3 PNGs → Brand Guard → approve → scheduled
@@ -43,19 +45,22 @@ Switch Console**. Each missing piece shows on **Studio → Connections** with it
   - your `approve #ref` → **Scheduled ✅**
   - a non-approver is refused
   - the group's chat ID is learned automatically
-- **Not run live yet** (need your credentials): Telegram media upload, Postiz publish, Drive, Sarvam voice. Each has unit tests with a mocked API.
+- **Claude pipeline, live on throwaway data (5 Nov):** Create → "Claude writes it now" → live progress in the
+  editor → image rendered → Brand Guard 7/7 → sent for approval; carousel with auto-send off → 7 slides
+  rendered, left as a draft; Marathi reel → 32 s MP4 with Sarvam voice and Devanagari subtitles.
+- **Not run live yet:** Telegram media upload, Postiz publish, Drive. Each has unit tests with a mocked API.
 
 ---
 
 ## 3. What you do now
 
-1. **Drive** — Google Cloud OAuth client (setup guide §2) → `GOOGLE_CLIENT_ID/SECRET` → Connections → Connect.
-2. **Telegram previews** — `TELEGRAM_BOT_TOKEN` (the same BotFather token Switch uses).
-3. **Voice** — `SARVAM_API_KEY`.
-4. **Switch** — create `pushpam-work`, `!invite-agent bolo-publisher` there; create `bolo-writer` and
+1. **Drive** — keys are in `.env`; click Connections → **Connect Google Drive** (redirect URI
+   `http://localhost:3000/api/drive/callback` must be in the OAuth client).
+2. **First real post** — Create → *Claude writes it now* → watch the Telegram group for the image + approval message.
+3. **Switch** — create `pushpam-work`, `!invite-agent bolo-publisher` there; create `bolo-writer` and
    `bolo-designer` (setup guide §3) and invite them.
-5. **Postiz** — Meta + LinkedIn apps, ngrok, `infra/postiz/setup.sh`, `POSTIZ_API_KEY`, channel ids into `client.json`.
-6. Tell me after each one — I'll verify it live (Connections page + one real post).
+4. **Postiz** — Meta + LinkedIn apps, ngrok, `infra/postiz/setup.sh`, `POSTIZ_API_KEY`, channel ids into `client.json`.
+5. Tell me after each one — I'll verify it live (Connections page + one real post).
 
 ---
 

@@ -28,6 +28,7 @@ Telegram username (e.g. `@pathankamran_03`) so you can approve from the dashboar
 | 2 | **Telegram bot token** — previews (image/video) in the approval group | The token BotFather gave you (same one Switch uses) | `TELEGRAM_BOT_TOKEN=` | Connections → Telegram previews: *Ready* |
 | 3 | **Google Drive** — references + archive | Google Cloud OAuth client (steps below) | `GOOGLE_CLIENT_ID=` `GOOGLE_CLIENT_SECRET=` | Connections → *Connect Google Drive* |
 | 4 | **Sarvam AI** — reel/story voiceover | dashboard.sarvam.ai → API keys | `SARVAM_API_KEY=` | Generate a reel with voiceover on |
+| 0 | **Claude** — writes posts and reels | Claude Code installed and signed in on this computer (`claude` once) | nothing (optional `CLAUDE_BIN`, `CLAUDE_MODEL`) | Connections → Claude: *Ready* |
 | 5 | **Postiz** — publishing | `bash infra/postiz/setup.sh` (steps below) | `POSTIZ_API_KEY=` | Connections → Postiz: *Connected* |
 
 `.env` changes are picked up without restarting (except the Publisher's Switch login — restart `npm run studio` after `switch:register`).
@@ -91,7 +92,12 @@ Other clients: create their rooms with the names in `brand-kits/<client>/client.
 1. **Create** (top right) → pick **Post · Carousel · Story · Reel** → speak the idea with **Wispr Flow**
    (click the box, hold your Wispr shortcut) → platforms + time → references from Drive or your computer.
 2. **Who writes it?**
-   - *AI agents* — `bolo-writer` gets the idea in #pushpam-work, writes the brief, captions, slides or
+   - *Claude writes it now* (default) — Claude reads the client's Brand Kit and writes the brief, headline,
+     text on the creative, captions (MR + EN and EN), carousel slides or reel scenes (voice lines in Marathi
+     script). Bolo renders the image / slides / reel with Sarvam voice, runs Brand Guard and — with
+     *Send automatically* ticked — sends it to the client's Telegram group. The editor shows each step live.
+     Post ≈ 30 s, carousel ≈ 45 s, reel ≈ 2–3 min. On any draft: **Write with Claude** in the editor.
+   - *Switch agents* — `bolo-writer` gets the idea in #pushpam-work, writes the brief, captions, slides or
      scene script; `bolo-designer` renders the media and sends it for approval. Watch it fill in.
    - *I'll write it* — the editor opens: captions (one per language), slides for carousels, scenes for
      reels/stories (on-screen line + voice line), then **Generate** the image/slides/video.
@@ -102,6 +108,11 @@ Other clients: create their rooms with the names in `brand-kits/<client>/client.
    Wispr too). Approve → scheduled in Postiz, "Scheduled ✅" in the group, media archived to Drive.
    Change → back to the writer agent in the work room.
 5. Postiz publishes at the time → "Live 🎉" with the link.
+
+**Design.** Images use one of six layouts drawn from the client's `tokens.json` — *hero* and *split* (need a
+photo), *editorial*, *offer* (price badge), *bold*, *festive*. Claude picks one; change it in the editor under
+**Design** (or `bolo layout #ref offer`). Attach real project photos (Drive or upload) and they are placed inside
+the design and used as moving reel backgrounds. Optional reel music: put `music.mp3` in `brand-kits/<client>/`.
 
 **Formats**
 

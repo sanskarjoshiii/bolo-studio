@@ -55,3 +55,13 @@ export function useNow(intervalMs = 60_000) {
   }, [intervalMs]);
   return now;
 }
+
+/** While a background job runs, re-fetch the server components every few seconds. */
+export function usePolling(active: boolean, intervalMs = 3000) {
+  const router = useRouter();
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => router.refresh(), intervalMs);
+    return () => clearInterval(t);
+  }, [active, intervalMs, router]);
+}

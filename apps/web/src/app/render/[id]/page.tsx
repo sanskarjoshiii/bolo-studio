@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { notFound } from "next/navigation";
-import { loadClient, readStore, verifyToken } from "@bolo/core";
-import { contentFromPost, MiniCreative, toVariant } from "@/components/ui/mini-creative";
+import { brandTokens, loadClient, mediaPath, readStore, verifyToken } from "@bolo/core";
+import { BrandCreative, photoIndex, postDesign } from "@/components/ui/brand-creative";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +15,20 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
   const token = verifyToken<{ pid: string; kind: string; w: number; h: number }>(t);
   if (!token || token.kind !== "render" || token.pid !== id) notFound();
   const post = readStore().posts.find((p) => p.id === id);
-  if (!post) notFound();
-  const client = loadClient(post.clientId);
+  const client = post && loadClient(post.clientId);
+  if (!post || !client) notFound();
+
+  // Reference photos (uploads / Drive) go into the design; inlined so the renderer needs no login
+  const photos = (post.media ?? []).filter((m) => m.kind === "image" && m.source !== "template");
+  const n = Number(slide ?? 0);
+  const pick = photos[photoIndex(n, photos.length)];
+  const photo = pick ? `data:${pick.type};base64,${readFileSync(mediaPath(post.id, pick.file)).toString("base64")}` : undefined;
+  const brand = brandTokens(client);
+  const { layout, design } = postDesign(post, brand, photos.length > 0, n);
 
   return (
     <div style={{ width: token.w, height: token.h, overflow: "hidden" }}>
-      <MiniCreative variant={toVariant(post.creative)} content={contentFromPost(post, client?.short ?? "", Number(slide ?? 0))} className="h-full w-full" />
+      <BrandCreative brand={brand} layout={layout} design={design} photo={photo} className="h-full w-full" />
     </div>
   );
 }

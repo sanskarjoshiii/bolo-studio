@@ -3,7 +3,9 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import type { Client, Media, Post } from "@bolo/core";
+import { brandTokens } from "@bolo/core/shared";
 import { contentFromPost, MiniCreative, toVariant } from "@/components/ui/mini-creative";
+import { BrandCreative, photoIndex, postDesign } from "@/components/ui/brand-creative";
 import { mediaUrl } from "./post-drawer";
 import { cn } from "@/lib/cn";
 
@@ -16,13 +18,17 @@ export function PhonePreview({
   client,
   className,
 }: {
-  post: Pick<Post, "id" | "title" | "creativeText" | "format" | "slides" | "creative" | "media" | "captions">;
-  client: Pick<Client, "short" | "name" | "mark">;
+  post: Pick<Post, "id" | "title" | "creativeText" | "format" | "slides" | "creative" | "media" | "captions" | "layout">;
+  client: Pick<Client, "short" | "name" | "mark" | "products" | "files">;
   className?: string;
 }) {
   const vertical = post.format === "Story" || post.format === "Reel";
   const video = (post.media ?? []).filter((m) => m.kind === "video").at(-1);
-  const images = (post.media ?? []).filter((m) => m.kind === "image");
+  const allImages = (post.media ?? []).filter((m) => m.kind === "image");
+  const photos = allImages.filter((m) => m.source !== "template");
+  // Same rule as publishing: designed renders when there are any, otherwise the uploaded images
+  const designed = allImages.filter((m) => m.source === "template");
+  const images = designed.length ? designed : allImages;
   const templateSlides = post.format === "Carousel" ? Math.max(1, post.slides?.length ?? 1) : 1;
   const frames: ({ kind: "media"; media: Media } | { kind: "template"; slide: number })[] =
     vertical && video
@@ -53,7 +59,7 @@ export function PhonePreview({
               <img src={mediaUrl(post as Post, frame.media)} alt="" className="size-full object-cover" />
             )
           ) : (
-            <MiniCreative variant={toVariant(post.creative)} content={contentFromPost(post, client.short, frame.slide)} className="size-full" />
+            <TemplateFrame post={post} client={client} photos={photos} slide={frame.slide} />
           )}
           {frames.length > 1 && (
             <>
@@ -90,4 +96,25 @@ export function PhonePreview({
       </p>
     </div>
   );
+}
+
+/** The live design before anything is rendered — the brand layout with the reference photos in it. */
+function TemplateFrame({
+  post,
+  client,
+  photos,
+  slide,
+}: {
+  post: Pick<Post, "id" | "title" | "creativeText" | "format" | "slides" | "creative" | "layout">;
+  client: Pick<Client, "short" | "name" | "mark" | "products" | "files">;
+  photos: Media[];
+  slide: number;
+}) {
+  if (post.format === "Reel") {
+    return <MiniCreative variant={toVariant(post.creative)} content={contentFromPost(post, client.short, slide)} className="size-full" />;
+  }
+  const brand = brandTokens({ ...client, files: client.files ?? [] });
+  const { layout, design } = postDesign(post, brand, photos.length > 0, slide);
+  const pick = photos[photoIndex(slide, photos.length)];
+  return <BrandCreative brand={brand} layout={layout} design={design} photo={pick ? mediaUrl(post as Post, pick) : undefined} className="size-full" />;
 }

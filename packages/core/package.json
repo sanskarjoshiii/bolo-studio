@@ -9,7 +9,7 @@
     "./shared": "./src/shared.ts"
   },
   "scripts": {
-    "test": "node --import tsx --test src/brand-kit.test.ts src/brand-guard.test.ts src/workflow.test.ts src/users.test.ts src/media.test.ts src/integrations.test.ts",
+    "test": "node --import tsx --test src/brand-kit.test.ts src/brand-guard.test.ts src/workflow.test.ts src/users.test.ts src/media.test.ts src/integrations.test.ts src/claude.test.ts",
     "typecheck": "tsc -p .",
     "reset": "tsx src/reset.ts"
   },

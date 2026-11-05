@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, Check, Loader2, Mic, Plus, RotateCw, Save, ShieldCheck, Trash2, Wrench } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, Check, Loader2, Mic, Plus, RotateCw, Save, ShieldCheck, Sparkles, Trash2, Wrench } from "lucide-react";
 import type { Caption, Client, Platform, Post, PostFormat, ReelScript, Slide } from "@bolo/core";
-import { FORMAT_INFO, FORMATS, formatSlot, istIso, istParts, postRef } from "@bolo/core/shared";
-import { api, useAction } from "./hooks";
+import { autoLayout, FORMAT_INFO, FORMATS, formatSlot, istIso, istParts, LAYOUT_IDS, LAYOUTS, postRef } from "@bolo/core/shared";
+import { api, useAction, usePolling } from "./hooks";
 import { ErrorNote } from "./controls";
 import { PhonePreview } from "./phone-preview";
 import { ClientReply, MarkLive, MediaSection, ResendButton } from "./post-drawer";
@@ -45,10 +45,24 @@ const toLocal = (iso: string) => {
 const input =
   "w-full rounded-lg bg-white/[0.05] px-3 py-2 text-[13px] text-white ring-1 ring-white/[0.08] outline-none placeholder:text-white/30 focus:ring-lime/50";
 
-export function EditorView({ client, post, drive }: { client: Client; post: Post; drive: { connected: boolean; folderUrl: string | null } }) {
-  const editable = post.status === "draft" || post.status === "brand-check" || post.status === "awaiting";
+export function EditorView({
+  client,
+  post,
+  drive,
+  jobAlive,
+}: {
+  client: Client;
+  post: Post;
+  drive: { connected: boolean; folderUrl: string | null };
+  jobAlive: boolean;
+}) {
+  // A job with no live worker means the server restarted mid-way — offer to run it again
+  const working = Boolean(post.job) && jobAlive;
+  const editable = !working && (post.status === "draft" || post.status === "brand-check" || post.status === "awaiting");
   const save = useAction();
   const submit = useAction();
+  const auto = useAction();
+  usePolling(working);
 
   const [title, setTitle] = useState(post.title);
   const [format, setFormat] = useState<PostFormat>(post.format);
@@ -57,6 +71,7 @@ export function EditorView({ client, post, drive }: { client: Client; post: Post
   const [tag, setTag] = useState(post.tag.replace(/^#/, ""));
   const [brief, setBrief] = useState(post.brief ?? "");
   const [creativeText, setCreativeText] = useState(post.creativeText);
+  const [layout, setLayout] = useState(post.layout ?? "");
   const [captions, setCaptions] = useState<Caption[]>(post.captions.length ? post.captions : [{ lang: "EN", text: "" }]);
   const [lang, setLang] = useState(0);
   const [slides, setSlides] = useState<Slide[]>(post.slides?.length ? post.slides : [{ headline: post.title }]);
@@ -86,6 +101,7 @@ export function EditorView({ client, post, drive }: { client: Client; post: Post
       tag,
       brief,
       creativeText,
+      layout,
       captions: captions.filter((c) => c.text.trim()),
       ...(format === "Carousel" ? { slides: slides.filter((s) => s.headline.trim()) } : {}),
       ...(usedReel ? { reel: { ...reel, scenes: reel.scenes.filter((s) => s.text.trim()) } } : {}),
@@ -100,6 +116,7 @@ export function EditorView({ client, post, drive }: { client: Client; post: Post
     tag: post.tag.replace(/^#/, ""),
     brief: post.brief ?? "",
     creativeText: post.creativeText,
+    layout: post.layout ?? "",
     captions: post.captions,
     slides: post.format === "Carousel" ? (post.slides ?? []) : undefined,
     reel: post.reel,
@@ -109,7 +126,7 @@ export function EditorView({ client, post, drive }: { client: Client; post: Post
     JSON.stringify({ ...current, slides: format === "Carousel" ? current.slides : undefined, reel: "reel" in current ? current.reel : post.reel }) !== original;
 
   const doSave = () => save.run(() => api(`/api/posts/${post.id}`, "PATCH", patch()));
-  const preview = { ...post, title, creativeText, format, slides: format === "Carousel" ? slides : post.slides, captions: captions.filter((c) => c.text.trim()) };
+  const preview = { ...post, title, creativeText, layout: layout || undefined, format, slides: format === "Carousel" ? slides : post.slides, captions: captions.filter((c) => c.text.trim()) };
   const failing = post.checks.filter((c) => !c.ok);
   const s = STATUS_META[post.status];
   const step = stepOf(post);
@@ -158,6 +175,23 @@ export function EditorView({ client, post, drive }: { client: Client; post: Post
           ))}
         </ol>
         <ErrorNote error={save.error} onClose={save.clearError} />
+        {working && post.job && (
+          <p className="mt-3 flex items-center gap-2 rounded-lg bg-lime/10 px-3 py-2 text-[12.5px] text-lime">
+            <Loader2 className="size-4 shrink-0 animate-spin" />
+            <span className="flex-1">{post.job.step}</span>
+            <span className="text-[11px] text-lime/60">updates live</span>
+          </p>
+        )}
+        {post.job && !jobAlive && (
+          <p className="mt-3 flex items-center gap-2 rounded-lg bg-amber-300/10 px-3 py-2 text-[12.5px] text-amber-100">
+            <AlertCircle className="size-4 shrink-0" /> Claude stopped at “{post.job.step}” (the app restarted). Run it again below.
+          </p>
+        )}
+        {!post.job && post.note?.startsWith("Automatic creation stopped") && (
+          <p className="mt-3 flex items-center gap-2 rounded-lg bg-amber-300/10 px-3 py-2 text-[12.5px] text-amber-100">
+            <AlertCircle className="size-4 shrink-0" /> {post.note}
+          </p>
+        )}
       </div>
 
       <div className="grid gap-8 p-6 xl:grid-cols-[1fr_340px]">
@@ -165,7 +199,11 @@ export function EditorView({ client, post, drive }: { client: Client; post: Post
         <fieldset disabled={!editable} className="min-w-0 space-y-6 disabled:opacity-70">
           {!editable && (
             <p className="rounded-lg bg-white/[0.05] px-3 py-2 text-[12px] text-fog">
-              {post.status === "live" ? "Published — read only." : "Scheduled in Postiz — read only. Change it in Postiz if needed."}
+              {working
+                ? "Claude is working on this post — it unlocks for editing when it's done."
+                : post.status === "live"
+                  ? "Published — read only."
+                  : "Scheduled in Postiz — read only. Change it in Postiz if needed."}
             </p>
           )}
 
@@ -225,6 +263,30 @@ export function EditorView({ client, post, drive }: { client: Client; post: Post
 
           <Card title={format === "Story" ? "Text on the story" : "Text on the creative"} hint={format === "Story" ? "Stories have no caption — the message, CTA and RERA no. go here" : "Product · offer · price onwards* — the RERA no. is added by Brand Guard"}>
             <input value={creativeText} onChange={(e) => setCreativeText(e.target.value)} placeholder="Luxe 28 · 2 & 3 BHK · ₹78 L onwards*" className={input} />
+            {format !== "Reel" && (
+              <div className="mt-3">
+                <p className="mb-1.5 text-[11.5px] text-fog">Design</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {["", ...LAYOUT_IDS].map((id) => {
+                    const auto = autoLayout({ title, creativeText }, (post.media ?? []).some((m) => m.kind === "image" && m.source !== "template"));
+                    return (
+                      <button
+                        key={id || "auto"}
+                        type="button"
+                        onClick={() => setLayout(id)}
+                        title={id ? LAYOUTS[id as keyof typeof LAYOUTS].hint : "Picked from the text and photos"}
+                        className={cn(
+                          "rounded-lg px-2.5 py-1.5 text-[12px] ring-1",
+                          layout === id ? "bg-lime/15 text-lime ring-lime/40" : "text-white/75 ring-white/[0.08] hover:bg-white/[0.06]",
+                        )}
+                      >
+                        {id ? LAYOUTS[id as keyof typeof LAYOUTS].label : `Auto (${LAYOUTS[auto].label})`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </Card>
 
           {format === "Carousel" && (
@@ -376,10 +438,22 @@ export function EditorView({ client, post, drive }: { client: Client; post: Post
               </ul>
             )}
             <ErrorNote error={submit.error} onClose={submit.clearError} />
+            <ErrorNote error={auto.error} onClose={auto.clearError} />
+            {(post.status === "draft" || post.status === "brand-check") && !working && (
+              <button
+                onClick={() => auto.run(() => api(`/api/posts/${post.id}/auto`, "POST", { send: false }))}
+                disabled={auto.pending || dirty}
+                title="Claude rewrites the brief, captions and slides / scenes from the idea and Brand Kit, then renders the media"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/[0.08] py-2.5 text-[13px] font-medium hover:bg-white/[0.12] disabled:opacity-40"
+              >
+                {auto.pending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4 text-lime" />}
+                {post.captions.length ? "Rewrite with Claude" : "Write with Claude"}
+              </button>
+            )}
             {(post.status === "draft" || post.status === "brand-check") && (
               <button
                 onClick={() => submit.run(() => api(`/api/posts/${post.id}/submit`, "POST"))}
-                disabled={submit.pending || dirty}
+                disabled={submit.pending || dirty || working}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-lime py-2.5 text-[13px] font-medium text-night hover:brightness-95 disabled:opacity-40"
               >
                 {submit.pending ? <Loader2 className="size-4 animate-spin" /> : post.status === "brand-check" ? <RotateCw className="size-4" /> : <ShieldCheck className="size-4" />}

@@ -6,6 +6,8 @@ export { readStore, resetStore, updateStore } from "./store";
 export { setting } from "./env";
 export { postizConfig, listIntegrations, uploadMedia, schedulePost, postizBody, providerSettings, captionFor, publishMedia } from "./postiz";
 export { telegramConfigured, sendMediaToRoom, previewMedia } from "./telegram";
+export { writeWithClaude, claudeAvailable, claudeBin, writeSchema, toWritten } from "./claude";
+export type { Written } from "./claude";
 export {
   driveStatus,
   driveAuthUrl,
@@ -52,6 +54,7 @@ export {
   submitForApproval,
   previewBrandGuard,
   prepareForRender,
+  setJob,
   agentName,
   platformsFor,
   resendApproval,

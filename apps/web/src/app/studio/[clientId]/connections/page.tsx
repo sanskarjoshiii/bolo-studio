@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { Bot, CircleCheck, CircleDashed, HardDrive, Mic, PlugZap, Send, Share2, Volume2, type LucideIcon } from "lucide-react";
+import { Bot, CircleCheck, CircleDashed, HardDrive, Mic, PlugZap, Send, Share2, Sparkles, Volume2, type LucideIcon } from "lucide-react";
 import {
   agentName,
+  claudeAvailable,
   driveStatus,
   findRoomByName,
   getClientStudio,
@@ -160,6 +161,19 @@ export default async function ConnectionsPage({ params, searchParams }: { params
           ) : (
             <p className="text-[11.5px] text-fog">An admin connects Drive.</p>
           )}
+        </Conn>
+
+        <Conn
+          icon={Sparkles}
+          title="Claude — writes posts and reels"
+          ok={claudeAvailable()}
+          status={claudeAvailable() ? "Ready" : "Claude Code not found"}
+          what="Create → “Claude writes it now”: Claude reads the Brand Kit, writes brief, captions, slides or reel scenes, Bolo renders the media and sends it for approval."
+        >
+          <Line
+            ok={claudeAvailable()}
+            text={claudeAvailable() ? "Uses this computer's Claude Code login — no API key needed" : "npm i -g @anthropic-ai/claude-code, run claude once to log in (or set CLAUDE_BIN in .env)"}
+          />
         </Conn>
 
         <Conn

@@ -5,7 +5,7 @@ import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
-import { addMedia, creativeTextHash, loadClient, mediaPath, prepareForRender, readStore, removeMedia, repoRoot, WorkflowError, type Client, type Post, type ReelScript } from "@bolo/core";
+import { addMedia, brandTokens, creativeTextHash, loadClient, mediaPath, prepareForRender, readStore, removeMedia, repoRoot, WorkflowError, type Client, type Post, type ReelScript } from "@bolo/core";
 import { speak, ttsConfigured, wavSeconds } from "./tts";
 import { FPS, type ReelProps } from "./composition/types";
 
@@ -27,23 +27,8 @@ async function serveUrl(log: (m: string) => void) {
 }
 
 function brandOf(client: Client) {
-  const tokens = (() => {
-    try {
-      return JSON.parse(client.files.find((f) => f.name === "tokens.json")?.content ?? "{}") as Record<string, string>;
-    } catch {
-      return {};
-    }
-  })();
-  return {
-    name: client.name,
-    kicker: client.products[0] ?? client.short,
-    primary: tokens.primary ?? client.mark.bg,
-    accent: tokens.accent ?? client.mark.fg,
-    bg: tokens.bg ?? "#ffffff",
-    text: tokens.text ?? "#111111",
-    fontHead: tokens.fontHead ?? "Inter",
-    fontBody: tokens.fontBody ?? "Inter",
-  };
+  const { radius: _radius, ...brand } = brandTokens(client);
+  return brand;
 }
 
 /** "Is Diwali ghari ka? — reel" → "Is Diwali ghari ka?" */
@@ -75,7 +60,7 @@ export function defaultScript(post: Post, client: Client): ReelScript {
   };
 }
 
-const MIME: Record<string, string> = { ".wav": "audio/wav", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
+const MIME: Record<string, string> = { ".wav": "audio/wav", ".mp3": "audio/mpeg", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
 
 /** Serve render assets over localhost so the headless browser can load them. */
 async function assetServer(files: Map<string, string>) {
@@ -132,10 +117,13 @@ export async function renderReel(postId: string, opts: { voice?: boolean; log?: 
     }
 
     const footnote = post.creativeText.split(/\n| · /).find((s) => /^RERA\b|Reg\. No\./i.test(s.trim()))?.trim() ?? "";
+    const music = join(repoRoot(), "brand-kits", client.id, "music.mp3");
+    if (existsSync(music)) files.set("music.mp3", music);
     const props: ReelProps = {
       brand: brandOf(client),
       scenes,
-      end: { title: client.name, cta: script.cta ?? "", footnote, frames: 3 * FPS },
+      end: { title: client.name, cta: script.cta ?? "", footnote, frames: Math.round(3.5 * FPS) },
+      music: existsSync(music) ? `${server.base}/music.mp3` : undefined,
     };
 
     const url = await serveUrl(log);
@@ -164,7 +152,7 @@ export async function renderReel(postId: string, opts: { voice?: boolean; log?: 
       textHash: creativeTextHash(post),
     });
     for (const m of previous) result = await removeMedia(post.id, m.file);
-    log(useVoice ? "Done — reel with voiceover attached." : "Done — silent reel attached (set SARVAM_API_KEY for voiceover).");
+    log(useVoice ? "Done — reel with voiceover attached." : ttsConfigured() ? "Done — silent reel attached." : "Done — silent reel attached (set SARVAM_API_KEY for voiceover).");
     return result;
   } finally {
     await server.close();

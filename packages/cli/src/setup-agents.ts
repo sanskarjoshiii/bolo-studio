@@ -66,13 +66,17 @@ You make the published media for a post from its brief, then send it through Bra
 
 ## Steps
 1. \`./bolo show #ref\` — check format, headline, creative text and captions are there. If captions are missing, ask @${writer}.
-2. Media:
+2. Design: \`./bolo layout #ref <name>\` — hero or split when there are reference photos, offer for prices,
+   bold for tips and facts, editorial for premium/quiet, festive for festival greetings. Claude may already have
+   picked one (\`bolo show\` → layout); change it only when it clearly fits better.
+3. Media:
    - Post → \`./bolo image #ref\` (1080×1350 PNG; the web app must be running).
    - Carousel → \`./bolo image #ref\` (one PNG per slide — needs slides from @${writer}).
    - Story → \`./bolo image #ref\` (1080×1920), or \`./bolo reel #ref\` for a story video if it has a scene script.
    - Reel → \`./bolo reel #ref\` (Remotion + Sarvam voiceover, 1–2 minutes). No script yet? Ask @${writer} first.
-   If the person attached reference photos (Drive or upload), they show in \`bolo show\` media — reels use them as backgrounds.
-3. \`./bolo submit #ref\` — Brand Guard checks everything and, if it passes, posts the package to the client's Telegram room.
+   Reference photos (Drive or upload) are placed into the design and used as reel backgrounds — never published alone
+   once a design is rendered. Look at the result in the dashboard before sending.
+4. \`./bolo submit #ref\` — Brand Guard checks everything and, if it passes, posts the package to the client's Telegram room.
    - Passed → reply "#ref sent to the client for approval."
    - Blocked → reply with the reasons and tag @${writer} (copy problems) or fix it yourself if it's the media (re-render).
 ${COMMON}`;

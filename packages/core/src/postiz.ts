@@ -84,7 +84,10 @@ export function publishMedia(post: Post) {
   const videos = media.filter((m) => m.kind === "video");
   if ((post.format === "Reel" || post.format === "Story") && videos.length) return [videos.at(-1)!];
   if (post.format === "Reel") return [];
-  return media.filter((m) => m.kind === "image").slice(0, post.format === "Carousel" ? 10 : 1);
+  // A designed render already contains the reference photos — publish it; otherwise the uploads
+  const images = media.filter((m) => m.kind === "image");
+  const designed = images.filter((m) => m.source === "template");
+  return (designed.length ? designed : images).slice(0, post.format === "Carousel" ? 10 : 1);
 }
 
 export type ScheduleResult = { postizId: string; dryRun: boolean; reason?: string };

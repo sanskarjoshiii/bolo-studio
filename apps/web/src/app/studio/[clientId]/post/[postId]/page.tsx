@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { driveStatus, getClientStudio } from "@bolo/core";
 import { EditorView } from "@/components/studio/editor-view";
+import { isRunning } from "@/lib/pipeline";
 
 export default async function PostEditorPage({ params }: { params: Promise<{ clientId: string; postId: string }> }) {
   const { clientId, postId } = await params;
@@ -14,6 +15,7 @@ export default async function PostEditorPage({ params }: { params: Promise<{ cli
       key={post.updatedAt}
       client={client}
       post={post}
+      jobAlive={isRunning(post.id)}
       drive={{ connected: drive.connected, folderUrl: drive.clients[clientId]?.references ?? null }}
     />
   );

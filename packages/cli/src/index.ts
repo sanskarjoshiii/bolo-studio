@@ -23,7 +23,7 @@ import {
   type PostFormat,
   type ReelScript,
 } from "@bolo/core";
-import { formatSlot, istIso } from "@bolo/core/shared";
+import { formatSlot, istIso, LAYOUTS } from "@bolo/core/shared";
 
 const HELP = `bolo — Bolo Studio commands for content agents
 
@@ -41,6 +41,7 @@ const HELP = `bolo — Bolo Studio commands for content agents
   bolo reel-script <ref> --file script.json  {"voiceLang":"mr-IN","speaker":"priya","cta":"Book a site visit",
                                               "scenes":[{"text":"On-screen line","voice":"What the voice says"}]}
 
+  bolo layout <ref> <name>                  pick the design: hero, split, editorial, offer, bold, festive (or auto)
   bolo image <ref>                          render the brand template: post 1080×1350, story 1080×1920, one PNG per carousel slide
   bolo reel <ref> [--no-voice]              render the reel / story video MP4 (Remotion + Sarvam voiceover)
   bolo check <ref>                          Brand Guard dry run — nothing changes
@@ -182,6 +183,7 @@ async function main() {
         brief: p.brief ?? null,
         tag: p.tag,
         creativeText: p.creativeText,
+        layout: p.layout ?? "auto",
         captions: p.captions,
         reel: p.reel ?? null,
         slides: p.slides ?? null,
@@ -257,6 +259,16 @@ async function main() {
       }
       const updated = await updatePost(p.id, { reel, format: p.format === "Story" ? "Story" : "Reel" });
       return out(`${postRef(updated)} reel script: ${updated.reel!.scenes.length} scenes${updated.reel!.voiceLang ? `, voice ${updated.reel!.voiceLang}` : ""}. Render: bolo reel ${postRef(updated)}`);
+    }
+
+    case "layout": {
+      const p = resolvePost(pos[0]);
+      const name = (pos[1] ?? "").toLowerCase();
+      if (!name || (name !== "auto" && !(name in LAYOUTS))) {
+        return out(`Layouts: ${Object.entries(LAYOUTS).map(([id, l]) => `${id} — ${l.hint}`).join("; ")}; auto — picked from the text and photos.`);
+      }
+      const updated = await updatePost(p.id, { layout: name === "auto" ? "" : name });
+      return out(`${postRef(updated)} layout: ${updated.layout ?? "auto"}. Render it: bolo image ${postRef(updated)}`);
     }
 
     case "image": {

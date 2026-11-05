@@ -1,0 +1,11 @@
+{
+  "name": "My Brand",
+  "short": "My Brand",
+  "sector": "Personal · Kamran Pathan",
+  "mark": { "bg": "#111A14", "fg": "#D9F24B" },
+  "rooms": { "work": "#my-brand", "approvals": "#my-brand (self-approve)" },
+  "channels": [
+    { "platform": "linkedin", "handle": "Kamran Pathan", "postizIntegrationId": "" },
+    { "platform": "instagram", "handle": "@kamran.builds", "postizIntegrationId": "" }
+  ]
+}

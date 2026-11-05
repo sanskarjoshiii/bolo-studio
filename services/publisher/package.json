@@ -1,0 +1,26 @@
+{
+  "name": "@bolo/publisher",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Publisher agent: turns client approvals from the Switch/Telegram room into Postiz schedules and posts live links back.",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "switch:register": "tsx src/register.ts",
+    "typecheck": "tsc -p .",
+    "test": "node --import tsx --test src/switch-agent.test.ts"
+  },
+  "dependencies": {
+    "@bolo/core": "*",
+    "@hono/node-server": "^1.13.0",
+    "hono": "^4.6.0",
+    "ws": "^8.22.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5"
+  }
+}

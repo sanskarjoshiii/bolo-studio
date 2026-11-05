@@ -1,0 +1,21 @@
+{
+  "name": "@bolo/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Brand Kits, Brand Guard, approval workflow, store and Postiz client shared by the web app and the Publisher agent.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./shared": "./src/shared.ts"
+  },
+  "scripts": {
+    "test": "node --import tsx --test src/brand-kit.test.ts src/brand-guard.test.ts src/workflow.test.ts src/users.test.ts src/media.test.ts src/integrations.test.ts",
+    "typecheck": "tsc -p .",
+    "reset": "tsx src/reset.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.19.0",
+    "typescript": "^5"
+  }
+}

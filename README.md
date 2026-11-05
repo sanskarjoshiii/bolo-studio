@@ -5,6 +5,19 @@
 > **Dates:** Nov 4–7, 2026 (submission closes Nov 7, 11:59 PM IST)
 > **Tracks:** Track 01 (Business) + Track 02 (Personal) · **Side tracks:** Code with Wispr · Best Blog · #HowISwitch
 
+### Quick start
+
+```bash
+npm install
+npx playwright install chromium   # image renderer, once
+npm run studio                    # studio http://localhost:3000 + Publisher :4100
+npm test
+```
+
+Create a post, carousel, story or reel → Brand Guard → the client approves on Telegram (with the actual
+image/video) → published via Postiz. Runs in dry-run mode until credentials are added.
+Credentials, Switch agents and daily use: **[docs/setup.md](docs/setup.md)** · progress: [STATUS.md](STATUS.md).
+
 ---
 
 ## Table of Contents
@@ -121,7 +134,7 @@ Without Switch, there is no shared room for agents from different laptops, no Te
 | **Groups** | All client rooms filed under a "Clients" group |
 | **Templates** | Capture `#pushpam-work` as a template → new client onboarded in one click |
 | **Multi-app bridge** | Team on Mattermost, clients on Telegram, same server |
-| **Agent protocol** | Publisher is a custom Python agent (SSE in, HTTP out) |
+| **Agent protocol** | Publisher is a custom TypeScript agent (`services/publisher`) |
 | **Owner permissions** | Only approvers named in `protocol.md` can instruct Publisher |
 
 ---
@@ -136,7 +149,7 @@ Without Switch, there is no shared room for agents from different laptops, no Te
 | 3 | **Visual Designer** | Shared | Static posts + carousels from `tokens.json` | Claude Code + Playwright |
 | 4 | **Reel Producer** | Single-holder | Script → voice → render → subtitles → MP4 | Claude Code + Remotion/FFmpeg |
 | 5 | **Brand Guard** | Single-holder | Checks every output against `rules.md` before client sees it | Codex (different model = independent review) |
-| 6 | **Publisher** | Single-holder | Schedules approved posts in Postiz, posts live links back | Custom Python agent (Switch protocol) |
+| 6 | **Publisher** | Single-holder | Schedules approved posts in Postiz, posts live links back | Custom TypeScript agent (`services/publisher`) |
 | + | **Analyst** *(optional)* | Single-holder | Weekly reach/engagement summary to client | Custom agent |
 
 **Hackathon minimum (4 agents):** Strategist+Copywriter merged · Visual · Reel · Publisher (Brand Guard as a check step). Keep 6 if time allows — it shows deeper Switch use.
@@ -576,13 +589,17 @@ Target the **Code with Wispr ($500)** side track.
 | Agent collaboration | **Switch** (server in Docker + Switch Console) |
 | Internal chat | Mattermost (ships with Switch) |
 | Client chat | Telegram (Switch bridge) |
-| Agents | Claude Code, Codex, custom Python agent (Switch protocol) |
+| Agents | Claude Code, Codex, custom TypeScript Publisher (`services/publisher`, Hono) |
+| Shared engine | `@bolo/core` — Brand Kit parser, Brand Guard rules, approval workflow, Postiz client |
+| Web + dashboard | Next.js 15 (App Router), Tailwind v4, Motion |
+| Storage | JSON store in `data/` (atomic writes) — zero services to clone and run |
 | Visuals | HTML/CSS + Playwright, optional AI image model |
 | Reels | Remotion or FFmpeg, TTS, Pexels API |
 | Speech-to-text | For client voice notes |
-| Scheduler | Postiz (self-hosted, Docker) |
+| Scheduler | Postiz (self-hosted, Docker — official compose via `infra/postiz/setup.sh`) |
 | Assets | Google Drive (Switch reference) |
 | Dictation | Wispr Flow |
+| Tooling | npm workspaces, TypeScript, `node:test` |
 
 ---
 
@@ -590,39 +607,38 @@ Target the **Code with Wispr ($500)** side track.
 ```
 bolo-studio/
 ├── README.md
-├── docker-compose.yml          # Postiz + Postgres + Redis
-├── switch/
-│   ├── templates/
-│   │   └── client-room.template.yaml
-│   └── room-instructions/
-│       ├── studio-hq.md
-│       ├── client-work.md
-│       └── client-approvals.md
-├── agents/
-│   ├── strategist.md
-│   ├── copywriter.md
-│   ├── visual-designer.md
-│   ├── reel-producer.md
-│   ├── brand-guard.md
-│   └── publisher/              # custom Python agent
-│       ├── main.py
-│       ├── postiz_client.py
-│       └── requirements.txt
-├── visual/
-│   ├── templates/              # HTML/CSS post + carousel templates
-│   └── render.py               # Playwright renderer
-├── reels/
-│   ├── remotion/               # or ffmpeg scripts
-│   └── tts.py
-├── brand-kits/
-│   ├── pushpam-demo/
+├── package.json                # npm workspaces + root scripts
+├── .env.example                # Postiz URL/key, Publisher port + webhook secret
+├── apps/
+│   └── web/                    # Next.js: landing page + studio dashboard + API routes
+│       └── src/
+│           ├── app/
+│           │   ├── page.tsx                    # landing
+│           │   ├── studio/[clientId]/          # calendar · approvals · brand-kit · agents · publishing
+│           │   └── api/                        # ideas, posts (edit/submit/reply/live), client settings
+│           └── components/{landing,studio,ui}/
+├── packages/
+│   └── core/                   # @bolo/core — shared by web + Publisher
+│       └── src/
+│           ├── brand-kit.ts    # reads brand-kits/*, parses protocol.md / products.md / rules.md
+│           ├── brand-guard.ts  # deterministic checks + auto-fixes from the bolo-checks block
+│           ├── workflow.ts     # idea → draft → brand-check → awaiting → scheduled → live
+│           ├── postiz.ts       # Postiz public API client (dry-run without a key)
+│           ├── store.ts        # JSON store with atomic, serialised writes
+│           └── *.test.ts
+├── services/
+│   └── publisher/              # custom agent: Switch room relay + Postiz webhook (Hono)
+├── brand-kits/                 # one folder per client = one Switch package
+│   ├── pushpam-demo/           # client.json, brand.md, rules.md, protocol.md, products.md, …
 │   ├── clinic-demo/
 │   └── my-brand/
-├── docs/
-│   ├── architecture.png
-│   └── setup.md
-└── blog/
-    └── how-we-built-bolo-studio.md
+├── agents/                     # instructions pasted into each agent in Switch Console
+├── switch/                     # room setup guide + room instructions
+├── infra/postiz/               # fetches the official Postiz docker-compose stack
+├── docs/setup.md
+└── data/                       # runtime store (git-ignored)
+
+# Planned next: render/ (Remotion stills + reels for the Visual and Reel agents), blog/
 ```
 
 ---

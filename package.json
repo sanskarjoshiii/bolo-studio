@@ -1,0 +1,26 @@
+{
+  "name": "bolo-studio",
+  "private": true,
+  "description": "Speak once. Ship everywhere. AI agents in Switch rooms turn a voice idea into brand-checked, client-approved, scheduled posts.",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @bolo/web",
+    "dev:publisher": "npm run dev -w @bolo/publisher",
+    "switch:register": "npm run switch:register -w @bolo/publisher --",
+    "build": "npm run build -w @bolo/web",
+    "test": "npm test -w @bolo/core && npm test -w @bolo/publisher",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint -w @bolo/web",
+    "data:reset": "npm run reset -w @bolo/core",
+    "bolo": "tsx packages/cli/src/index.ts",
+    "agents:setup": "tsx packages/cli/src/setup-agents.ts",
+    "studio": "node scripts/studio.mjs"
+  },
+  "engines": {
+    "node": ">=20.9"
+  }
+}

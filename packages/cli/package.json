@@ -1,0 +1,19 @@
+{
+  "name": "@bolo/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "`bolo` — the command the content agents (Claude Code in Switch) use to read and write posts.",
+  "bin": { "bolo": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@bolo/core": "*",
+    "@bolo/reels": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { authenticate, createSession, SESSION_TTL } from "@bolo/core";
+import { refreshStore, authenticate, createSession, SESSION_TTL } from "@bolo/core";
 import { SESSION_COOKIE } from "@/lib/auth";
 
 // Simple per-process throttle: 10 failed attempts per email per 15 minutes.
 const failures = new Map<string, { count: number; until: number }>();
 
 export async function POST(req: Request) {
+  await refreshStore();
   const { email = "", password = "" } = (await req.json().catch(() => ({}))) as { email?: string; password?: string };
   const key = email.trim().toLowerCase();
   const f = failures.get(key);

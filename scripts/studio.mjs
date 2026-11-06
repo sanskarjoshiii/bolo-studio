@@ -1,10 +1,17 @@
-// npm run studio — web app (:3000) + Publisher (:4100) in one terminal.
+// npm run studio — web app (:3000) + Publisher (:4100) in one terminal, in dev mode.
+// npm run demo   — the same, but a production build first: every page loads fast (for demos).
 // Ctrl+C stops both, including their child processes (Windows keeps them alive otherwise).
 import { spawn, execSync } from "node:child_process";
 
+const prod = process.argv.includes("--prod");
+if (prod) {
+  console.log("Building the studio for the demo (about a minute)…");
+  execSync("npm run build", { stdio: "inherit" });
+}
+
 const procs = [
-  { name: "web      ", color: 36, args: ["run", "dev"] },
-  { name: "publisher", color: 33, args: ["run", "dev:publisher"] },
+  { name: "web      ", color: 36, args: prod ? ["run", "start", "-w", "@bolo/web"] : ["run", "dev"] },
+  { name: "publisher", color: 33, args: ["run", prod ? "start" : "dev", "-w", "@bolo/publisher"] },
 ];
 
 const children = procs.map(({ name, color, args }) => {

@@ -7,7 +7,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function PATCH(req: Request, { params }: Ctx) {
   const { id } = await params;
   return handle(async (me) => {
-    const b = await body<{ name?: string; role?: Role; telegram?: string; password?: string }>(req);
+    const b = await body<{ name?: string; role?: Role; telegram?: string; password?: string; username?: string }>(req);
     if (me.role !== "admin" && me.id !== id) throw new WorkflowError(403, "Only admins can edit other people.");
     if (me.role !== "admin" && b.role) throw new WorkflowError(403, "Only admins can change roles.");
     return updateUser(id, b);
@@ -19,7 +19,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   return handle(
     async (me) => {
       if (me.id === id) throw new WorkflowError(409, "You can't delete your own account.");
-      deleteUser(id);
+      await deleteUser(id);
       return { id };
     },
     { admin: true },

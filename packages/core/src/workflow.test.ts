@@ -32,7 +32,7 @@ test("idea → caption → Brand Guard → approval → scheduled (dry run) → 
   assert.equal(checked.status, "awaiting", JSON.stringify(checked.checks));
   assert.match(checked.captions[0].text, /onwards/);
 
-  await assert.rejects(() => wf.approve(idea.id, "@random_person"), /Only approvers listed in protocol.md/);
+  await assert.rejects(() => wf.approve(idea.id, "@random_person"), /Only this company.s approvers/);
 
   const scheduled = await wf.clientReply(idea.id, { handle: "@sj_pushpam", text: "approve" }); // backup approver
   assert.equal(scheduled.status, "scheduled");

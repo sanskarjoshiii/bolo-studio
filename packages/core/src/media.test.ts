@@ -59,7 +59,7 @@ test("approver handles match with or without @, and only approvers can request c
   const idea = await wf.createIdea({ clientId: "my-brand", text: "Day 3 learnings", author: "Kamran" });
   await wf.updatePost(idea.id, { captions: [{ lang: "EN", text: "Day 3: the Publisher now listens to Switch over a WebSocket." }] });
   await wf.submitForApproval(idea.id);
-  await assert.rejects(() => wf.clientReply(idea.id, { handle: "@stranger", text: "change: nope" }), /Only approvers/);
+  await assert.rejects(() => wf.clientReply(idea.id, { handle: "@stranger", text: "change: nope" }), /Only this company.s approvers/);
   const r = await wf.clientReply(idea.id, { handle: "PathanKamran_03", text: "approve" });
   assert.equal(r.status, "scheduled");
 });

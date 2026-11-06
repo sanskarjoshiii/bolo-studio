@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 import {
   AlertCircle,
   Check,
@@ -25,8 +25,8 @@ import {
 import type { Caption, Client, Media, Post } from "@bolo/core";
 import { formatSlot, istIso, istParts, postRef } from "@bolo/core/shared";
 import { api, useAction } from "./hooks";
+import { useLive } from "./live";
 import { useApproverFor } from "./me";
-import { DrivePicker } from "./drive-picker";
 import { ErrorNote } from "./controls";
 import { contentFromPost, MiniCreative, toVariant } from "@/components/ui/mini-creative";
 import { platformIcon, platformLabel, TelegramIcon } from "@/components/ui/platform-icons";
@@ -58,6 +58,7 @@ export function PostDrawer({ post, client, onClose }: { post: Post; client: Clie
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: 40, opacity: 0 }}
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      data-lenis-prevent
       className="thin-scrollbar absolute top-0 right-0 bottom-0 z-30 flex w-full max-w-[420px] flex-col overflow-y-auto rounded-2xl bg-[#0f2219]/95 ring-1 ring-white/[0.08] backdrop-blur-xl"
     >
       <header className="sticky top-0 z-10 flex items-start justify-between gap-3 bg-[#0f2219]/95 p-4 backdrop-blur-xl">
@@ -232,13 +233,11 @@ export function PostDrawer({ post, client, onClose }: { post: Post; client: Clie
           </button>
         )}
 
-        {post.status === "awaiting" && <ResendButton post={post} client={client} />}
+        {post.status === "awaiting" && <ResendButton post={post} />}
         {post.status === "awaiting" && <ClientReply post={post} client={client} />}
 
         {post.status === "scheduled" && post.dryRun && <MarkLive post={post} />}
-        {post.status === "scheduled" && !post.dryRun && (
-          <p className="text-center text-[12px] text-fog">Queued in Postiz · goes live {formatSlot(post.scheduledAt)}</p>
-        )}
+        {post.status === "scheduled" && !post.dryRun && <PostNow post={post} />}
 
         {post.status === "live" &&
           (post.permalink ? (
@@ -379,48 +378,63 @@ function ContentEditor({ post, onDone }: { post: Post; onDone: () => void }) {
 export function ClientReply({ post, client }: { post: Post; client: Client }) {
   const { run, pending, error, clearError } = useAction();
   const approver = useApproverFor(client);
-  const [change, setChange] = useState("");
-  const reply = (text: string) => run(() => api(`/api/posts/${post.id}/reply`, "POST", { text }));
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState<"approve" | "change" | "reject" | null>(null);
+  const reply = async (kind: "approve" | "change" | "reject", text: string) => {
+    setBusy(kind);
+    await run(() => api(`/api/posts/${post.id}/reply`, "POST", { text }));
+    setBusy(null);
+  };
 
   if (!approver) {
+    const names = client.approvers.map((a) => a.name).join(" / ") || "the company's owner";
     return (
       <p className="flex items-start gap-2 rounded-lg bg-white/[0.04] px-3 py-2.5 text-[12px] leading-relaxed text-white/80">
         <TelegramIcon className="mt-0.5 size-3.5 shrink-0 text-[#5eb5e8]" />
         <span>
-          Waiting for {client.approvers.map((a) => a.name).join(" / ")} in <span className="text-white">{client.rooms.approvals}</span>. They reply{" "}
-          <span className="font-mono text-lime/90">approve {postRef(post)}</span> there.
+          Waiting for {names}. They approve here in Approvals, or on Telegram by replying <span className="font-mono text-lime/90">approve {postRef(post)}</span>.
         </span>
       </p>
     );
   }
 
+  const reason = note.trim().replace(/^(change|reject):\s*/i, "");
   return (
     <div className="space-y-2">
       <ErrorNote error={error} onClose={clearError} />
-      <p className="flex items-center gap-2 text-[11px] text-fog">
-        <TelegramIcon className="size-3 text-[#5eb5e8]" /> You&apos;re an approver ({approver.handle}) — acting here is recorded as you.
+      <p className="text-[11px] text-fog">
+        {approver.owner ? "No approvers are set, so you approve as the owner" : "You're an approver for this company"} — recorded as {approver.name.split(" ")[0]}.
       </p>
-      <div className="flex gap-2">
-        <input
-          value={change}
-          onChange={(e) => setChange(e.target.value)}
-          placeholder="change: slide 3 price should say onwards"
-          className="min-w-0 flex-1 rounded-lg bg-white/[0.05] px-2.5 py-2 text-[12px] text-white ring-1 ring-white/[0.08] outline-none placeholder:text-white/30 focus:ring-lime/50"
-        />
+      <textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        placeholder="What should change? (for Request changes or Reject)"
+        className="w-full resize-none rounded-lg bg-white/[0.05] px-2.5 py-2 text-[12px] text-white ring-1 ring-white/[0.08] outline-none placeholder:text-white/30 focus:ring-lime/50"
+      />
+      <div className="grid grid-cols-2 gap-2">
         <button
-          onClick={() => change.trim() && reply(`change: ${change.replace(/^change:\s*/i, "")}`)}
-          disabled={pending || !change.trim()}
-          className="rounded-lg bg-white/[0.08] px-3 text-[12px] text-white hover:bg-white/[0.12] disabled:opacity-40"
+          onClick={() => reason && reply("change", `change: ${reason}`)}
+          disabled={pending || !reason}
+          title={reason ? "Send it back to production with this note" : "Write what should change first"}
+          className="flex items-center justify-center gap-1.5 rounded-lg bg-white/[0.08] py-2 text-[12px] text-white hover:bg-white/[0.12] disabled:opacity-40"
         >
-          Send
+          {busy === "change" ? <Loader2 className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />} Request changes
+        </button>
+        <button
+          onClick={() => confirm(`Reject “${post.title}”? It goes back to production and won't be posted.`) && reply("reject", `reject: ${reason}`)}
+          disabled={pending}
+          className="flex items-center justify-center gap-1.5 rounded-lg bg-red-500/10 py-2 text-[12px] text-red-200 ring-1 ring-red-400/20 hover:bg-red-500/20 disabled:opacity-40"
+        >
+          {busy === "reject" ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />} Reject
         </button>
       </div>
       <button
-        onClick={() => reply("approve")}
+        onClick={() => reply("approve", "approve")}
         disabled={pending}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-lime py-2.5 text-[13px] font-medium text-night hover:brightness-95 disabled:opacity-50"
       >
-        {pending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Approve as {approver.name.split(" ")[0]}
+        {busy === "approve" ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Approve
       </button>
     </div>
   );
@@ -437,12 +451,24 @@ export function MediaView({ post, media, className }: { post: Post; media: Media
   );
 }
 
-/** What actually gets published: rendered template, a designer's file, a Drive reference, or a reel MP4. */
-export function MediaSection({ post, editable, drive }: { post: Post; editable: boolean; drive?: { connected: boolean; folderUrl?: string | null } }) {
+/** What actually gets published: the generated design, an uploaded file, or a reel MP4. */
+export function MediaSection({
+  post,
+  editable,
+  drive,
+  onStart,
+}: {
+  post: Post;
+  editable: boolean;
+  drive?: { connected: boolean; folderUrl?: string | null };
+  /** Starts a background generation job (the editor passes its own, which also refreshes the dock). */
+  onStart?: (url: string, payload?: unknown) => Promise<unknown>;
+}) {
   const { run, pending, error, clearError } = useAction();
-  const [busy, setBusy] = useState<"upload" | "render" | "reel" | "drive" | null>(null);
+  const live = useLive();
+  const generating = Boolean(live.jobFor(post.id) ?? post.job);
+  const [busy, setBusy] = useState<"upload" | "render" | "reel" | null>(null);
   const [voice, setVoice] = useState(true);
-  const [picker, setPicker] = useState(false);
   const media = post.media ?? [];
   const video = post.format === "Reel" || post.format === "Story";
   const imageLabel =
@@ -465,17 +491,17 @@ export function MediaSection({ post, editable, drive }: { post: Post; editable: 
     setBusy(null);
   };
 
-  const render = async () => {
-    setBusy("render");
-    await run(() => api(`/api/posts/${post.id}/render`, "POST"));
+  // Rendering runs in the background: progress shows in the editor and the corner dock, with Cancel
+  const start = async (kind: "render" | "reel") => {
+    setBusy(kind);
+    const url = `/api/posts/${post.id}/${kind}`;
+    const payload = kind === "reel" ? { voice } : undefined;
+    if (onStart) await onStart(url, payload);
+    else await run(async () => (await api(url, "POST", payload), live.refresh()));
     setBusy(null);
   };
-
-  const renderReel = async () => {
-    setBusy("reel");
-    await run(() => api(`/api/posts/${post.id}/reel`, "POST", { voice }));
-    setBusy(null);
-  };
+  const render = () => start("render");
+  const renderReel = () => start("reel");
 
   return (
     <section>
@@ -512,27 +538,27 @@ export function MediaSection({ post, editable, drive }: { post: Post; editable: 
       {editable && (
         <div className="mt-2 grid grid-cols-2 gap-2">
           {post.format !== "Reel" && (
-            <MediaButton onClick={render} disabled={pending} busy={busy === "render"} icon={ImageIcon}>
-              {busy === "render" ? "Rendering…" : imageLabel}
+            <MediaButton onClick={render} disabled={pending || generating} busy={busy === "render"} icon={ImageIcon}>
+              {generating ? "Generating…" : imageLabel}
             </MediaButton>
           )}
           {video && (
-            <MediaButton onClick={renderReel} disabled={pending} busy={busy === "reel"} icon={Film}>
-              {busy === "reel" ? "Rendering video…" : videoLabel}
+            <MediaButton onClick={renderReel} disabled={pending || generating} busy={busy === "reel"} icon={Film}>
+              {generating ? "Generating…" : videoLabel}
             </MediaButton>
           )}
           <label className={cn(BTN, "cursor-pointer", pending && "pointer-events-none opacity-50")}>
             {busy === "upload" ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />} Upload file
             <input type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime" multiple className="sr-only" onChange={(e) => upload(e.target.files)} />
           </label>
-          {drive?.connected ? (
-            <MediaButton onClick={() => setPicker(true)} disabled={pending} busy={busy === "drive"} icon={HardDrive}>
-              From Drive
-            </MediaButton>
+          {drive?.connected && drive.folderUrl ? (
+            <a href={drive.folderUrl} target="_blank" rel="noreferrer" className={BTN} title="Every generated design is saved here automatically">
+              <HardDrive className="size-3.5" /> Designs in Drive
+            </a>
           ) : (
-            <span className={cn(BTN, "cursor-default text-fog")} title="Connect Google Drive in Connections">
-              <HardDrive className="size-3.5" /> Drive not connected
-            </span>
+            <a href={`/studio/${post.clientId}/connections`} className={cn(BTN, "text-fog")} title="Keep a copy of every design in your Google Drive">
+              <HardDrive className="size-3.5" /> Connect Drive
+            </a>
           )}
         </div>
       )}
@@ -543,20 +569,6 @@ export function MediaSection({ post, editable, drive }: { post: Post; editable: 
         </label>
       )}
       <ErrorNote error={error} onClose={clearError} />
-      <AnimatePresence>
-        {picker && (
-          <DrivePicker
-            clientId={post.clientId}
-            folderUrl={drive?.folderUrl}
-            onClose={() => setPicker(false)}
-            onPick={async (files) => {
-              setBusy("drive");
-              for (const f of files) await run(() => api(`/api/posts/${post.id}/drive`, "POST", { fileId: f.id }));
-              setBusy(null);
-            }}
-          />
-        )}
-      </AnimatePresence>
     </section>
   );
 }
@@ -571,7 +583,7 @@ function MediaButton({ children, onClick, disabled, busy, icon: Icon }: { childr
   );
 }
 
-export function ResendButton({ post, client }: { post: Post; client: Client }) {
+export function ResendButton({ post }: { post: Post }) {
   const { run, pending, error, clearError } = useAction();
   const [sent, setSent] = useState(false);
   return (
@@ -586,7 +598,32 @@ export function ResendButton({ post, client }: { post: Post; client: Client }) {
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/[0.06] py-2 text-[12px] text-white/85 hover:bg-white/[0.1] disabled:opacity-50"
       >
         {pending ? <Loader2 className="size-3.5 animate-spin" /> : <TelegramIcon className="size-3.5 text-[#5eb5e8]" />}
-        {sent ? `Sent to ${client.rooms.approvals}` : `Resend to ${client.rooms.approvals}`}
+        {sent ? "Sent to Telegram" : "Send to Telegram again"}
+      </button>
+    </div>
+  );
+}
+
+/** Approved posts that Bolo publishes itself: when it goes out, and a button to post right away. */
+export function PostNow({ post }: { post: Post }) {
+  const { run, pending, error, clearError } = useAction();
+  const failed = Object.entries(post.publish?.results ?? {}).filter(([, r]) => r && !r.ok);
+  if (post.publish?.via !== "direct") return <p className="text-[12px] text-fog">Queued in Postiz · goes live {formatSlot(post.scheduledAt)} IST</p>;
+  return (
+    <div className="space-y-2">
+      <p className="text-[12px] text-fog">Goes out {formatSlot(post.scheduledAt)} IST — Bolo posts it automatically.</p>
+      {failed.map(([platform, r]) => (
+        <p key={platform} className="rounded-lg bg-amber-300/10 px-3 py-2 text-[11.5px] text-amber-100">
+          {platform}: {r!.error}
+        </p>
+      ))}
+      <ErrorNote error={error} onClose={clearError} />
+      <button
+        onClick={() => confirm(`Post “${post.title}” now?`) && run(() => api(`/api/posts/${post.id}/publish-now`, "POST"))}
+        disabled={pending}
+        className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/[0.08] py-2.5 text-[13px] font-medium text-white hover:bg-white/[0.12] disabled:opacity-50"
+      >
+        {pending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} {pending ? "Posting…" : failed.length ? "Try again now" : "Post now"}
       </button>
     </div>
   );
@@ -598,7 +635,7 @@ export function MarkLive({ post }: { post: Post }) {
   return (
     <div className="space-y-2">
       <ErrorNote error={error} onClose={clearError} />
-      <p className="text-[11px] text-fog">Dry run — Postiz isn&apos;t connected, so nothing was posted. Mark it live manually:</p>
+      <p className="text-[11px] text-fog">Nothing is connected for posting, so it wasn&apos;t posted. Post it yourself, then paste the link (or connect Instagram, Facebook or LinkedIn in Connections):</p>
       <div className="flex gap-2">
         <input
           value={link}

@@ -1,0 +1,51 @@
+# Bolo Studio on one AWS server (EC2). Start it with infra/aws/deploy.sh.
+#   caddy      — HTTPS for your domain (free certificates, renewed automatically)
+#   web        — the studio: pages, API, image + reel rendering, scheduler, Telegram bot
+#   publisher  — optional: the Switch agent (only if you run Switch for your own team)
+# Everything the app saves (posts, accounts, media) is in the "data" volume on the server's disk.
+
+services:
+  web:
+    build:
+      context: ../..
+    restart: unless-stopped
+    env_file: ../../.env
+    environment:
+      BOLO_DATA_DIR: /data
+      BOLO_INTERNAL_URL: http://127.0.0.1:3000
+    volumes:
+      - data:/data
+    # Chromium needs a bigger /dev/shm than Docker's 64 MB default
+    shm_size: "1gb"
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [web]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in infra/aws/.env, e.g. studio.yourcompany.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+
+  publisher:
+    profiles: ["switch"]
+    build:
+      context: ../..
+    restart: unless-stopped
+    env_file: ../../.env
+    environment:
+      BOLO_DATA_DIR: /data
+      BOLO_BACKGROUND: "off"
+    command: ["npm", "run", "start", "-w", "@bolo/publisher"]
+    volumes:
+      - data:/data
+
+volumes:
+  data:
+  caddy:

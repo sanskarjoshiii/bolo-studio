@@ -2,13 +2,16 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, Check, Loader2, Mic, Plus, RotateCw, Save, ShieldCheck, Sparkles, Trash2, Wrench } from "lucide-react";
-import type { Caption, Client, Platform, Post, PostFormat, ReelScript, Slide } from "@bolo/core";
-import { autoLayout, FORMAT_INFO, FORMATS, formatSlot, istIso, istParts, LAYOUT_IDS, LAYOUTS, postRef } from "@bolo/core/shared";
-import { api, useAction, usePolling } from "./hooks";
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, Check, Loader2, Mic, Plus, RotateCw, Save, ShieldCheck, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import type { Caption, Client, LanguageOption, Platform, Post, PostFormat, ReelScript, Size, Slide } from "@bolo/core";
+import { autoLayout, FORMAT_INFO, FORMATS, formatSlot, istIso, istParts, LAYOUT_IDS, LAYOUTS, postRef, sizeFor } from "@bolo/core/shared";
+import { api, useAction } from "./hooks";
+import { LanguagePicker, SizePicker } from "./format-options";
+import { ProgressBar, useLive, useSmoothProgress } from "./live";
+import { ScrollMain } from "@/components/ui/smooth-scroll";
 import { ErrorNote } from "./controls";
 import { PhonePreview } from "./phone-preview";
-import { ClientReply, MarkLive, MediaSection, ResendButton } from "./post-drawer";
+import { ClientReply, MarkLive, MediaSection, PostNow, ResendButton } from "./post-drawer";
 import { platformIcon, platformLabel, TelegramIcon } from "@/components/ui/platform-icons";
 import { STATUS_META } from "@/lib/status";
 import { cn } from "@/lib/cn";
@@ -50,19 +53,26 @@ export function EditorView({
   post,
   drive,
   jobAlive,
+  ai,
 }: {
   client: Client;
   post: Post;
   drive: { connected: boolean; folderUrl: string | null };
   jobAlive: boolean;
+  /** "Claude" / "OpenAI" — whichever AI writes for this company; null when none is connected. */
+  ai: string | null;
 }) {
+  // The dock's poll knows this post's live progress; when the job ends, the page refreshes itself
+  const live = useLive();
+  const liveJob = live.jobFor(post.id);
   // A job with no live worker means the server restarted mid-way — offer to run it again
-  const working = Boolean(post.job) && jobAlive;
+  const working = Boolean(liveJob ? liveJob.alive : post.job && jobAlive);
+  const progress = useSmoothProgress(working ? (liveJob ?? (post.job ? { progress: post.job.progress ?? 0, at: post.job.at } : undefined)) : undefined);
   const editable = !working && (post.status === "draft" || post.status === "brand-check" || post.status === "awaiting");
   const save = useAction();
   const submit = useAction();
   const auto = useAction();
-  usePolling(working);
+  const cancel = useAction();
 
   const [title, setTitle] = useState(post.title);
   const [format, setFormat] = useState<PostFormat>(post.format);
@@ -72,6 +82,8 @@ export function EditorView({
   const [brief, setBrief] = useState(post.brief ?? "");
   const [creativeText, setCreativeText] = useState(post.creativeText);
   const [layout, setLayout] = useState(post.layout ?? "");
+  const [size, setSize] = useState<Size | undefined>(post.size);
+  const [languages, setLanguages] = useState<LanguageOption | undefined>(post.languages);
   const [captions, setCaptions] = useState<Caption[]>(post.captions.length ? post.captions : [{ lang: "EN", text: "" }]);
   const [lang, setLang] = useState(0);
   const [slides, setSlides] = useState<Slide[]>(post.slides?.length ? post.slides : [{ headline: post.title }]);
@@ -102,6 +114,8 @@ export function EditorView({
       brief,
       creativeText,
       layout,
+      size: size ?? null,
+      languages: languages ?? null,
       captions: captions.filter((c) => c.text.trim()),
       ...(format === "Carousel" ? { slides: slides.filter((s) => s.headline.trim()) } : {}),
       ...(usedReel ? { reel: { ...reel, scenes: reel.scenes.filter((s) => s.text.trim()) } } : {}),
@@ -117,6 +131,8 @@ export function EditorView({
     brief: post.brief ?? "",
     creativeText: post.creativeText,
     layout: post.layout ?? "",
+    size: post.size ?? null,
+    languages: post.languages ?? null,
     captions: post.captions,
     slides: post.format === "Carousel" ? (post.slides ?? []) : undefined,
     reel: post.reel,
@@ -126,13 +142,18 @@ export function EditorView({
     JSON.stringify({ ...current, slides: format === "Carousel" ? current.slides : undefined, reel: "reel" in current ? current.reel : post.reel }) !== original;
 
   const doSave = () => save.run(() => api(`/api/posts/${post.id}`, "PATCH", patch()));
-  const preview = { ...post, title, creativeText, layout: layout || undefined, format, slides: format === "Carousel" ? slides : post.slides, captions: captions.filter((c) => c.text.trim()) };
+  const preview = { ...post, title, creativeText, layout: layout || undefined, format, size, slides: format === "Carousel" ? slides : post.slides, captions: captions.filter((c) => c.text.trim()) };
+  const startJob = (url: string, payload?: unknown) => auto.run(async () => {
+    const r = await api(url, "POST", payload);
+    live.refresh(); // the dock and this page pick the job up right away
+    return r;
+  });
   const failing = post.checks.filter((c) => !c.ok);
   const s = STATUS_META[post.status];
   const step = stepOf(post);
 
   return (
-    <main className="thin-scrollbar min-w-0 flex-1 overflow-y-auto rounded-2xl bg-night-2/60 ring-1 ring-white/[0.06]">
+    <ScrollMain>
       {/* header */}
       <div className="sticky top-0 z-20 border-b border-white/[0.05] bg-[#0b1b14]/95 px-6 py-3 backdrop-blur">
         <div className="flex flex-wrap items-center gap-3">
@@ -175,19 +196,33 @@ export function EditorView({
           ))}
         </ol>
         <ErrorNote error={save.error} onClose={save.clearError} />
-        {working && post.job && (
-          <p className="mt-3 flex items-center gap-2 rounded-lg bg-lime/10 px-3 py-2 text-[12.5px] text-lime">
-            <Loader2 className="size-4 shrink-0 animate-spin" />
-            <span className="flex-1">{post.job.step}</span>
-            <span className="text-[11px] text-lime/60">updates live</span>
-          </p>
+        {working && (liveJob ?? post.job) && (
+          <div className="mt-3 rounded-lg bg-lime/10 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-[12.5px] text-lime">
+              <Loader2 className="size-4 shrink-0 animate-spin" />
+              <span className="min-w-0 flex-1 truncate">{(liveJob ?? post.job)!.step}</span>
+              <span className="font-medium tabular-nums">{Math.round(progress)}%</span>
+              <button
+                onClick={() => cancel.run(async () => (await api(`/api/posts/${post.id}/cancel`, "POST"), live.refresh()))}
+                disabled={cancel.pending}
+                className="ml-1 inline-flex items-center gap-1 rounded-md bg-black/20 px-2 py-1 text-[11.5px] text-white/85 hover:bg-red-500/20 hover:text-red-100"
+              >
+                {cancel.pending ? <Loader2 className="size-3 animate-spin" /> : <X className="size-3" />} Cancel
+              </button>
+            </div>
+            <ProgressBar value={progress} className="mt-2" />
+            <p className="mt-1.5 text-[11px] text-lime/60">You can leave this page — progress stays in the corner, and you&apos;ll get a notification when it&apos;s done.</p>
+          </div>
         )}
-        {post.job && !jobAlive && (
+        {post.job && !working && (
           <p className="mt-3 flex items-center gap-2 rounded-lg bg-amber-300/10 px-3 py-2 text-[12.5px] text-amber-100">
-            <AlertCircle className="size-4 shrink-0" /> Claude stopped at “{post.job.step}” (the app restarted). Run it again below.
+            <AlertCircle className="size-4 shrink-0" /> Generation stopped at “{post.job.step}” (the server restarted). Run it again below, or cancel it.
+            <button onClick={() => cancel.run(() => api(`/api/posts/${post.id}/cancel`, "POST"))} className="ml-auto rounded-md bg-black/20 px-2 py-1 text-[11.5px] hover:bg-black/30">
+              Clear
+            </button>
           </p>
         )}
-        {!post.job && post.note?.startsWith("Automatic creation stopped") && (
+        {!post.job && (post.note?.startsWith("Automatic creation stopped") || post.note?.startsWith("Media failed")) && (
           <p className="mt-3 flex items-center gap-2 rounded-lg bg-amber-300/10 px-3 py-2 text-[12.5px] text-amber-100">
             <AlertCircle className="size-4 shrink-0" /> {post.note}
           </p>
@@ -200,10 +235,10 @@ export function EditorView({
           {!editable && (
             <p className="rounded-lg bg-white/[0.05] px-3 py-2 text-[12px] text-fog">
               {working
-                ? "Claude is working on this post — it unlocks for editing when it's done."
+                ? "This post is being generated — it unlocks for editing when it's done (or when you cancel)."
                 : post.status === "live"
                   ? "Published — read only."
-                  : "Scheduled in Postiz — read only. Change it in Postiz if needed."}
+                  : "Approved — read only. It waits in Drafts until it goes out."}
             </p>
           )}
 
@@ -257,7 +292,15 @@ export function EditorView({
             </div>
           </Card>
 
-          <Card title="Brief" hint="Goal · audience · angle — written by bolo-writer or you">
+          <Card title="Size" hint={`${sizeFor({ format, size }).w} × ${sizeFor({ format, size }).h} px — changing it means generating the media again`}>
+            <SizePicker key={format} format={format} value={size} onChange={setSize} />
+          </Card>
+
+          <Card title="Languages" hint="Captions, text on the design and the reel voice">
+            <LanguagePicker value={languages} onChange={setLanguages} />
+          </Card>
+
+          <Card title="Brief" hint="Goal · audience · angle — written by the AI or you">
             <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={3} className={cn(input, "resize-y leading-relaxed")} />
           </Card>
 
@@ -406,7 +449,7 @@ export function EditorView({
 
           <div className="rounded-xl bg-white/[0.035] p-4 ring-1 ring-white/[0.06]">
             {dirty && editable && <p className="mb-2 text-[11.5px] text-amber-200/90">Save your changes before generating media — renders use the saved text.</p>}
-            <MediaSection post={post} editable={editable} drive={drive} />
+            <MediaSection post={post} editable={editable} drive={drive} onStart={startJob} />
           </div>
 
           {/* Brand Guard + send */}
@@ -441,13 +484,13 @@ export function EditorView({
             <ErrorNote error={auto.error} onClose={auto.clearError} />
             {(post.status === "draft" || post.status === "brand-check") && !working && (
               <button
-                onClick={() => auto.run(() => api(`/api/posts/${post.id}/auto`, "POST", { send: false }))}
-                disabled={auto.pending || dirty}
-                title="Claude rewrites the brief, captions and slides / scenes from the idea and Brand Kit, then renders the media"
+                onClick={() => startJob(`/api/posts/${post.id}/auto`, { send: false })}
+                disabled={auto.pending || dirty || !ai}
+                title={ai ? `${ai} rewrites the brief, captions and slides / scenes from the idea and Brand Kit, then designs the media` : "Connect an AI agent in Connections first"}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/[0.08] py-2.5 text-[13px] font-medium hover:bg-white/[0.12] disabled:opacity-40"
               >
                 {auto.pending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4 text-lime" />}
-                {post.captions.length ? "Rewrite with Claude" : "Write with Claude"}
+                {ai ? (post.captions.length ? `Rewrite & redesign with ${ai}` : `Write & design with ${ai}`) : "Connect an AI agent to write with AI"}
               </button>
             )}
             {(post.status === "draft" || post.status === "brand-check") && (
@@ -457,21 +500,21 @@ export function EditorView({
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-lime py-2.5 text-[13px] font-medium text-night hover:brightness-95 disabled:opacity-40"
               >
                 {submit.pending ? <Loader2 className="size-4 animate-spin" /> : post.status === "brand-check" ? <RotateCw className="size-4" /> : <ShieldCheck className="size-4" />}
-                {dirty ? "Save first" : "Check & send to client on Telegram"}
+                {dirty ? "Save first" : "Check & send for approval"}
               </button>
             )}
             {post.status === "awaiting" && (
               <>
                 <p className="flex items-start gap-2 rounded-lg bg-amber-300/10 px-3 py-2 text-[12px] text-amber-100">
                   <TelegramIcon className="mt-0.5 size-3.5 shrink-0 text-[#5eb5e8]" />
-                  Waiting in {client.rooms.approvals} — the client replies <span className="font-mono">approve {postRef(post)}</span>
+                  Waiting for approval — in Approvals here, or on Telegram ({postRef(post)}).
                 </p>
-                <ResendButton post={post} client={client} />
+                <ResendButton post={post} />
                 <ClientReply post={post} client={client} />
               </>
             )}
             {post.status === "scheduled" && post.dryRun && <MarkLive post={post} />}
-            {post.status === "scheduled" && !post.dryRun && <p className="text-[12px] text-fog">Queued in Postiz · goes live {formatSlot(post.scheduledAt)} IST</p>}
+            {post.status === "scheduled" && !post.dryRun && <PostNow post={post} />}
             {post.status === "live" && post.permalink && (
               <a href={post.permalink} target="_blank" rel="noreferrer" className="block rounded-lg bg-white/[0.08] py-2.5 text-center text-[13px] hover:bg-white/[0.12]">
                 View live post
@@ -496,7 +539,7 @@ export function EditorView({
           </div>
         </aside>
       </div>
-    </main>
+    </ScrollMain>
   );
 }
 

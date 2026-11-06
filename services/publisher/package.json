@@ -9,7 +9,7 @@
     "start": "tsx src/index.ts",
     "switch:register": "tsx src/register.ts",
     "typecheck": "tsc -p .",
-    "test": "node --import tsx --test src/switch-agent.test.ts"
+    "test": "node --import tsx --test src/switch-agent.test.ts src/room.test.ts"
   },
   "dependencies": {
     "@bolo/core": "*",

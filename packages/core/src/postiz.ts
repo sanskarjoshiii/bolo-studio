@@ -3,6 +3,7 @@ import { basename } from "node:path";
 import { setting } from "./env";
 import { WorkflowError } from "./errors";
 import { mediaPath } from "./media";
+import { languagePlan } from "./shared";
 import type { Client, Platform, Post } from "./types";
 
 // Postiz public API — https://docs.postiz.com/public-api
@@ -55,7 +56,11 @@ export function providerSettings(platform: Platform, post: Post): Record<string,
 /** Caption for one platform: stories carry none; LinkedIn keeps at most 3 hashtags. */
 export function captionFor(platform: Platform, post: Post) {
   if (post.format === "Story") return "";
-  const text = post.captions[0]?.text ?? "";
+  const caps = post.captions.filter((c) => c.text.trim());
+  // Two-language posts (Marathi + English …) publish both captions; hashtags only once, at the end
+  const both = caps.length > 1 && (languagePlan(post.languages)?.langs.length ?? 0) > 1;
+  const stripTags = (t: string) => t.replace(/(^|\s)#[\p{L}\p{N}_]+/gu, "").replace(/[ \t]{2,}/g, " ").trim();
+  const text = both ? `${stripTags(caps[0].text)}\n\n${caps[1].text.trim()}` : (caps[0]?.text ?? "");
   if (platform !== "linkedin") return text;
   let n = 0;
   return text.replace(/#[\p{L}\p{N}_]+/gu, (t) => (++n <= 3 ? t : "")).replace(/[ \t]{2,}/g, " ").trim();

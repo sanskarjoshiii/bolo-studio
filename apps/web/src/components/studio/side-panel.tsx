@@ -33,7 +33,7 @@ export function SidePanel({ client, settings, posts }: { client: Client; setting
       <section>
         <SectionLabel
           action={
-            <Link href={`/studio/${client.id}/publishing`} className="text-[11.5px] text-lime hover:underline">
+            <Link href={`/studio/${client.id}/connections`} className="text-[11.5px] text-lime hover:underline">
               Manage
             </Link>
           }
@@ -57,10 +57,10 @@ export function SidePanel({ client, settings, posts }: { client: Client; setting
           })}
         </div>
         <Link
-          href={`/studio/${client.id}/publishing`}
+          href={`/studio/${client.id}/connections`}
           className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/15 py-2.5 text-[12.5px] text-white/80 transition-colors hover:bg-white/[0.04]"
         >
-          Connect channel via Postiz <Plus className="size-3.5" />
+          Connect your accounts <Plus className="size-3.5" />
         </Link>
       </section>
 

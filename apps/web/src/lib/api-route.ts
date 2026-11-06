@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { WorkflowError, type User } from "@bolo/core";
+import { refreshStore, WorkflowError, type User } from "@bolo/core";
 import { requireUser } from "./auth";
 
 function toResponse(e: unknown) {
@@ -12,6 +12,7 @@ function toResponse(e: unknown) {
 /** Public route handler (login, setup): WorkflowErrors become clean JSON errors. */
 export async function handlePublic<T>(fn: () => Promise<T>) {
   try {
+    await refreshStore();
     return NextResponse.json(await fn());
   } catch (e) {
     return toResponse(e);

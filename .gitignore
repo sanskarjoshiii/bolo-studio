@@ -22,4 +22,4 @@ infra/postiz/upstream/
 agents/workspace/
 
 # design references (third-party video/screenshots) — keep local only
-UI/
+/UI/

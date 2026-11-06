@@ -1,5 +1,23 @@
 # Bolo Studio — Project Status
 
+## 6 Nov — what changed
+
+- **Companies and teams:** anyone can sign up (`/signup`), then create a company or accept an invite. Users see only their own companies; platform admins see all. Team → Add member takes an existing account's email or username and sends an invite, which shows up in that person's notifications (bell + `/notifications`).
+- **Telegram is Switch-first:** Switch Console bridges each client's Telegram group into the company's approvals room; the Publisher agent posts the package (Bolo sends the image/video through the same bot) and turns `approve #ref` / `change #ref: …` / `reject #ref` into actions. Approvers can be Telegram usernames with no Bolo account (Team → Telegram approvers), or anyone in the group. Admins set each company's room names on the Platform page.
+- **Approvals:** setting approvers is optional. With none set, the owner approves. Approve / Request changes / Reject all work in the studio, and on Telegram via buttons.
+- **Sections:** Calendar shows published posts only. **Drafts** holds approved posts waiting to go out (with Post now). Approvals holds everything generated but not approved.
+- **Every post, carousel, story and reel:** 10 size presets plus Custom (width × height), and 6 language plans (Marathi + English, Hindi + English, Hindi + Marathi, Marathi, Hindi, English).
+- **Generation:** runs in the background with a progress dock that follows you across sections. Click it to open the editor; Cancel stops it. A notification arrives when it's done.
+- **Connections (client):** Telegram (one-click group link), Instagram & Facebook and LinkedIn (log in, then Bolo posts directly at the scheduled time), Google Drive (per company), Sarvam AI key, AI agent (Claude or OpenAI key). Each has plain-language steps. Keys are tested, then stored encrypted.
+- **Platform (admin only):** Switch, Postiz, Wispr Flow and the agents moved here, with a checklist of the platform keys.
+- **Brand Kit editing** in the studio: company details, colours, fonts, rules, posting times, and every file.
+- **Designs:** layouts adapt to any size and use the AI's highlight word and CTA, with contrast checks and brand fonts loaded properly.
+- **Fixed:** the reel error "window.getStaticCompositions is not defined". Remotion's server was landing on the studio's port 3000; it now always picks a free port.
+- **Speed:** cached store and parsing, a loading screen plus top progress bar between sections, Lenis smooth scrolling, and Turbopack for `npm run dev`.
+- **Deploy:** one AWS EC2 server + MongoDB Atlas (Mumbai), see [docs/deploy-aws.md](docs/deploy-aws.md).
+- **Google Drive:** `drive.file` only — every generated design is saved to `Bolo Studio / <Company> / Designs`, approved posts to `Published`. The Drive picker is gone; photos are uploaded from the computer.
+- **Onboarding:** after creating a company, step 2 connects Telegram (a group, or "just me") — or skip.
+
 **Last updated:** Thu 5 Nov 2026 (Day 2 of 4) · **Submission:** Sat 7 Nov, 11:59 PM IST
 **Branch:** `main` — all work is **uncommitted**.
 **Setup and daily use:** [docs/setup.md](docs/setup.md)

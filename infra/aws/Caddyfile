@@ -1,0 +1,14 @@
+{$DOMAIN} {
+	encode zstd gzip
+	# Uploads (reels, photos) can be large
+	request_body {
+		max_size 250MB
+	}
+	reverse_proxy web:3000 {
+		# reel renders take a minute or two
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
+}

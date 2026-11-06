@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { listClients, loadClient, parseApprovers, parseBestTimes, parseChecks, parseRera } from "./brand-kit";
+import { parseApprovers, parseBestTimes, parseChecks, parseRera } from "./brand-kit";
+import { listClients, loadClient } from "./companies";
 
 test("parses approvers and backup approvers from protocol.md", () => {
   const md = "## Approval\n- Approver: Mr. X (Telegram @mr_x)\n- Backup approver: Ms. Y (Telegram @ms.y)\n";

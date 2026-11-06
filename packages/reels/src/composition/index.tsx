@@ -30,7 +30,12 @@ function Root() {
       fps={FPS}
       durationInFrames={totalFrames(sample)}
       defaultProps={sample}
-      calculateMetadata={({ props }) => ({ durationInFrames: totalFrames(props) })}
+      calculateMetadata={({ props }) => ({
+        durationInFrames: totalFrames(props),
+        // H.264 needs even dimensions
+        width: props.size ? Math.round(props.size.w / 2) * 2 : WIDTH,
+        height: props.size ? Math.round(props.size.h / 2) * 2 : HEIGHT,
+      })}
     />
   );
 }

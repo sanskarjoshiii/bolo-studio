@@ -4,9 +4,10 @@
 // In Switch Console → Your Agents → +, set the agent's Directory to that folder.
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { agentName, listClients, repoRoot } from "@bolo/core";
+import { agentName, listClients, loadStore, repoRoot } from "@bolo/core";
 
 const root = repoRoot();
+await loadStore();
 const writer = agentName("writer");
 const designer = agentName("designer");
 const clients = listClients()

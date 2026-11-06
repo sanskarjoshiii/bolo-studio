@@ -1,13 +1,14 @@
+import { authorizePost } from "@/lib/access";
 import { body, handle } from "@/lib/api-route";
-import { renderVideo } from "@/lib/media-jobs";
+import { startMediaJob } from "@/lib/pipeline";
 
-export const maxDuration = 300;
-
-/** Render the reel / story video (Remotion + Sarvam voiceover). */
+/** Render the reel / story video (Remotion + Sarvam voiceover) — runs in the background. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return handle(async (me) => {
+    authorizePost(me, id);
     const { voice = true } = await body<{ voice?: boolean }>(req).catch(() => ({ voice: true }));
-    return { post: await renderVideo(id, { voice, by: me.name }) };
+    startMediaJob(id, "video", { origin: new URL(req.url).origin, voice, byId: me.id });
+    return { started: true };
   });
 }

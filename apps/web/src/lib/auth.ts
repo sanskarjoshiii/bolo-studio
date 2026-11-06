@@ -1,11 +1,13 @@
 import "server-only";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { userFromSession, verifyToken, WorkflowError, type User } from "@bolo/core";
+import { refreshStore, userFromSession, verifyToken, WorkflowError, type User } from "@bolo/core";
 
 export const SESSION_COOKIE = "bolo_session";
 
+/** The signed-in account. Also the moment each request picks up changes made by other servers. */
 export async function currentUser(): Promise<User | null> {
+  await refreshStore();
   return userFromSession((await cookies()).get(SESSION_COOKIE)?.value);
 }
 
@@ -27,7 +29,7 @@ async function agentUser(): Promise<User | null> {
   const p = verifyToken<{ kind: string; name: string }>(token);
   if (p?.kind !== "agent") return null;
   const name = String(p.name || "agent").slice(0, 40);
-  return { id: `agent:${name}`, email: `${name}@agents.local`, name: `${name} (agent)`, role: "member", createdAt: new Date(0).toISOString() };
+  return { id: `agent:${name}`, email: `${name}@agents.local`, username: name, name: `${name} (agent)`, role: "member", createdAt: new Date(0).toISOString() };
 }
 
 /** API routes: 401 without a session, 403 when an admin is required. */

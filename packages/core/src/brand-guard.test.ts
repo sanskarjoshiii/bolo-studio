@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadClient } from "./brand-kit";
+import { loadClient } from "./companies";
 import { runBrandGuard, type GuardInput } from "./brand-guard";
 
 const pushpam = loadClient("pushpam-demo")!;

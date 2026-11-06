@@ -1,16 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { listClients, loadClient, repoRoot } from "./brand-kit";
+import { repoRoot } from "./brand-kit";
+import { clientsFor, loadClient, managersOf, pushNotification } from "./companies";
 import { runBrandGuard } from "./brand-guard";
-import { schedulePost } from "./postiz";
-import { postToRoom } from "./switch";
-import { sendMediaToRoom } from "./telegram";
+import { planPublish } from "./publish";
+import { findRoomByName, postToRoom, switchConfig, type Delivery } from "./switch";
+import { approvalButtons, chatFor, sendMediaToChat, sendText } from "./telegram";
 import { archiveToDrive } from "./drive";
 import { DEFAULT_SETTINGS } from "./seed";
-import { addDays, creativeTextHash, FORMAT_INFO, FORMATS, formatSlot, istIso, istParts, LAYOUTS, parseClock, PLATFORM_SHORT, postRef } from "./shared";
+import { addDays, creativeTextHash, FORMAT_INFO, FORMATS, formatSlot, istIso, istParts, LANGUAGE_IDS, LAYOUTS, parseClock, PLATFORM_SHORT, postRef, sizeFor, validSize } from "./shared";
 import { readStore, updateStore } from "./store";
-import type { Caption, Client, ClientSettings, Platform, Post, PostFormat, ReelScript, Slide, StudioData } from "./types";
+import type { Caption, Client, ClientSettings, LanguageOption, Platform, Post, PostFormat, ReelScript, Size, Slide, StudioData } from "./types";
+import type { User } from "./users";
 
 import { WorkflowError } from "./errors";
 export { WorkflowError };
@@ -37,9 +39,10 @@ const schedSummary = (p: Post) => `${p.platforms.map((x) => PLATFORM_SHORT[x]).j
 
 // ---------- reads ----------
 
-export function getStudio() {
+/** Companies this account can open, with their posts (platform admins: every company). */
+export function getStudio(user: Pick<User, "id" | "role">) {
   const data = readStore();
-  return listClients().map((client) => ({
+  return clientsFor(user).map((client) => ({
     client,
     settings: data.settings[client.id] ?? { ...DEFAULT_SETTINGS },
     posts: data.posts.filter((p) => p.clientId === client.id).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)),
@@ -87,7 +90,25 @@ export type NewContent = {
    * "agents" — handed to bolo-writer in the Switch work room; "self" — a person writes it in the editor.
    */
   mode?: "claude" | "agents" | "self";
+  /** Output size; empty → the format's default. */
+  size?: Size;
+  languages?: LanguageOption;
+  /** User id of the author (gets the notifications). */
+  authorId?: string;
 };
+
+function checkSize(size: Size | undefined, format: PostFormat) {
+  if (!size) return undefined;
+  const ok = validSize(size, format === "Reel" || format === "Story");
+  if (!ok) throw new WorkflowError(400, "Size: width and height 320–4096 px (videos: even numbers, at most 1920 on the short side).");
+  return ok;
+}
+
+function checkLanguages(l: string | undefined) {
+  if (!l) return undefined;
+  if (!(LANGUAGE_IDS as string[]).includes(l)) throw new WorkflowError(400, `Languages must be one of ${LANGUAGE_IDS.join(", ")}.`);
+  return l as LanguageOption;
+}
 
 export async function createIdea(input: NewContent): Promise<Post> {
   const text = input.text.trim();
@@ -95,6 +116,8 @@ export async function createIdea(input: NewContent): Promise<Post> {
   const client = requireClient(input.clientId);
   const format = input.format ?? guessFormat(text);
   if (!FORMATS.includes(format)) throw new WorkflowError(400, `Format must be ${FORMATS.join(", ")}.`);
+  const size = checkSize(input.size, format);
+  const languages = checkLanguages(input.languages);
   const possible = platformsFor(client, format);
   if (!possible.length) throw new WorkflowError(400, `${client.name} has no channel that takes a ${format.toLowerCase()}.`);
   const platforms = input.platforms?.length ? input.platforms : possible;
@@ -119,6 +142,9 @@ export async function createIdea(input: NewContent): Promise<Post> {
       status: "draft",
       captions: [],
       checks: [],
+      size,
+      languages,
+      createdBy: input.authorId,
       thread: [{ from: input.author, text, at: nowIso() }],
       note:
         mode === "agents"
@@ -126,7 +152,7 @@ export async function createIdea(input: NewContent): Promise<Post> {
           : mode === "claude"
             ? undefined
             : "New idea — add captions and media, then run Brand Guard",
-      job: mode === "claude" ? { step: "Claude is writing the brief and captions…", at: nowIso() } : undefined,
+      job: mode === "claude" ? { step: "Writing the brief and captions…", at: nowIso(), progress: 2, startedAt: nowIso(), by: input.authorId } : undefined,
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
@@ -164,6 +190,9 @@ export type PostPatch = {
   reel?: ReelScript;
   slides?: Slide[];
   layout?: string;
+  /** null clears it (back to the format's default). */
+  size?: Size | null;
+  languages?: LanguageOption | null;
 };
 
 export function updatePost(id: string, patch: PostPatch) {
@@ -202,6 +231,8 @@ export function updatePost(id: string, patch: PostPatch) {
     }
     if (patch.reel) post.reel = patch.reel;
     if (patch.slides) post.slides = patch.slides.map((s) => ({ headline: s.headline.trim(), text: s.text?.trim() || undefined }));
+    if (patch.size !== undefined) post.size = patch.size === null ? undefined : checkSize(patch.size, format);
+    if (patch.languages !== undefined) post.languages = patch.languages === null ? undefined : checkLanguages(patch.languages);
     // A format change can leave platforms the new format can't use (e.g. LinkedIn stories)
     if (patch.format && !patch.platforms) {
       const allowed = platformsFor(client, patch.format);
@@ -210,7 +241,7 @@ export function updatePost(id: string, patch: PostPatch) {
     }
 
     // Any content change invalidates the previous check and any pending approval
-    if (patch.captions || patch.creativeText !== undefined || patch.title !== undefined || patch.reel || patch.format || patch.slides) {
+    if (patch.captions || patch.creativeText !== undefined || patch.title !== undefined || patch.reel || patch.format || patch.slides || patch.size !== undefined) {
       post.checks = [];
       if (post.status === "awaiting") post.thread.push({ from: "Brand Guard", text: "Draft changed — approval request withdrawn.", at: nowIso() });
       post.status = "draft";
@@ -275,7 +306,18 @@ export function submitForApproval(id: string) {
         detail: "The text changed after the media was rendered — re-render it (Generate from template, or bolo image / bolo reel).",
       });
     }
-    const passed = guard.passed && !stale.length;
+    // Same for the size: a render made before the size changed is the wrong shape
+    const want = sizeFor(post);
+    const wrongSize = (post.media ?? []).filter((m) => m.source === "template" && m.w && m.h && (m.w !== want.w || m.h !== want.h));
+    if (wrongSize.length) {
+      post.checks.push({
+        id: "size",
+        label: `Media is ${want.w} × ${want.h}`,
+        ok: false,
+        detail: `${wrongSize.length} file(s) were rendered at another size — generate the media again.`,
+      });
+    }
+    const passed = guard.passed && !stale.length && !wrongSize.length;
 
     const fixed = guard.checks.filter((c) => c.fixed);
     if (!passed) {
@@ -293,13 +335,22 @@ export function submitForApproval(id: string) {
       text: `${post.title} ready ✅ ${guard.checks.length} checks passed.${fixedLine} Schedule: ${schedSummary(post)}. Reply: approve / change: <what>`,
       at: nowIso(),
     });
+    for (const userId of approverIds(client)) {
+      pushNotification(data, userId, {
+        kind: "approval",
+        title: `Ready for your approval: ${post.title}`,
+        body: `${post.format} · ${schedSummary(post)} IST · ${guard.checks.length} brand checks passed`,
+        companyId: client.id,
+        href: `/studio/${client.id}/approvals?post=${post.id}`,
+      });
+    }
     return post;
   }).then(async (post) => {
     const client = requireClient(post.clientId);
     if (post.status === "awaiting") {
-      await sendMediaFirst(post, client.rooms.approvals);
-      await announce(post, approvalPackage(post));
-      await toWorkRoom(post, `✅ ${postRef(post)} ${post.title} passed Brand Guard and went to ${client.rooms.approvals}.`);
+      await sendMediaFirst(post, client);
+      await announce(post, approvalPackage(post, Boolean(chatFor(client.id)?.own)), { buttons: true });
+      await toWorkRoom(post, `✅ ${postRef(post)} ${post.title} passed Brand Guard and is waiting for approval.`);
     } else {
       const failing = post.checks.filter((c) => !c.ok).map((c) => `• ${c.label}${c.detail ? ` — ${c.detail}` : ""}`);
       await toWorkRoom(
@@ -322,11 +373,14 @@ export function agentName(role: "writer" | "designer") {
 }
 
 /**
- * The client approves what they can see: send the image / slides / video to the Telegram group
- * before the approval text. A missing file or token is noted on the post, never blocks it.
+ * The approver sees what they approve: the image / slides / video go to the company's Telegram
+ * group before the approval text. No Telegram connected → nothing to send (approval happens in
+ * the studio); a failed send is noted on the post, never blocks it.
  */
-async function sendMediaFirst(post: Post, room: string) {
-  const sent = await sendMediaToRoom(room, post);
+async function sendMediaFirst(post: Post, client: Client) {
+  const chat = chatFor(client.id, client.rooms.approvals);
+  if (!chat) return;
+  const sent = await sendMediaToChat(chat.chatId, post);
   if (!sent.ok) {
     await updateStore((data) => {
       const p = data.posts.find((x) => x.id === post.id);
@@ -336,13 +390,46 @@ async function sendMediaFirst(post: Post, room: string) {
 }
 
 /** Show (or clear, with null) what automatic production is doing right now. */
-export function setJob(id: string, step: string | null, note?: string) {
+export function setJob(
+  id: string,
+  step: string | null,
+  note?: string,
+  opts: { progress?: number; by?: string; done?: { ok: boolean; title: string; body?: string } } = {},
+) {
   return updateStore((data) => {
     const p = findPost(data, id);
-    p.job = step ? { step, at: nowIso() } : undefined;
+    const prev = p.job;
+    p.job = step
+      ? {
+          step,
+          at: nowIso(),
+          progress: Math.max(0, Math.min(100, Math.round(opts.progress ?? prev?.progress ?? 0))),
+          startedAt: prev?.startedAt ?? nowIso(),
+          by: opts.by ?? prev?.by,
+        }
+      : undefined;
     if (note !== undefined) p.note = note || undefined;
+    p.updatedAt = nowIso();
+    const by = opts.by ?? prev?.by ?? p.createdBy;
+    if (opts.done && by) {
+      pushNotification(data, by, {
+        kind: opts.done.ok ? "job-done" : "job-failed",
+        title: opts.done.title,
+        body: opts.done.body,
+        companyId: p.clientId,
+        href: `/studio/${p.clientId}/post/${p.id}`,
+      });
+    }
     return p;
   });
+}
+
+/** Everything being generated right now in these companies — the progress dock polls this. */
+export function activeJobs(companyIds: string[]) {
+  const ids = new Set(companyIds);
+  return readStore()
+    .posts.filter((p) => p.job && ids.has(p.clientId))
+    .map((p) => ({ id: p.id, clientId: p.clientId, title: p.title, format: p.format, step: p.job!.step, progress: p.job!.progress ?? 0, at: p.job!.at, startedAt: p.job!.startedAt ?? p.job!.at }));
 }
 
 /** Status notes for the team and agents in the client's work room (best effort). */
@@ -353,12 +440,30 @@ async function toWorkRoom(post: Post, text: string) {
 
 const handleKey = (h: string) => h.replace(/^@/, "").trim().toLowerCase();
 
-export function findApprover(client: Client, handle: string) {
-  return client.approvers.find((a) => handleKey(a.handle) === handleKey(handle));
+/** Who is acting: a studio account (userId) and/or a Telegram username (handle). */
+/**
+ * Who is acting: a studio account (userId) and/or a Telegram username (handle). `inGroup` is set
+ * only by the Telegram bot, for a message from the company's own connected chat.
+ */
+export type Actor = { handle?: string; userId?: string; name?: string; inGroup?: boolean };
+
+export function findApprover(client: Client, who: string | Actor) {
+  const a: Actor = typeof who === "string" ? { handle: who } : who;
+  const listed =
+    (a.userId ? client.approvers.find((x) => x.userId === a.userId) : undefined) ??
+    (a.handle && handleKey(a.handle) ? client.approvers.find((x) => x.handle && handleKey(x.handle) === handleKey(a.handle!)) : undefined);
+  // A Telegram-only approver is recorded with the name Telegram shows for them ("Meera (@client_manager)")
+  if (listed) return !listed.userId && a.name ? { ...listed, name: a.name } : listed;
+  // "Anyone in this group can approve": whoever tapped in the company's own Telegram chat
+  if (a.inGroup && client.groupApproves) return { name: a.name || a.handle || "Telegram group", handle: a.handle ?? "", backup: false };
+  return undefined;
 }
 
-/** The message the client sees in Telegram — one short line per item, no tables (Telegram won't render them). */
-function approvalPackage(post: Post) {
+/** Studio accounts that approve this company's posts (they get "ready for approval" notifications). */
+const approverIds = (client: Client) => client.approvers.map((a) => a.userId).filter((x): x is string => Boolean(x));
+
+/** The message the approver sees in Telegram — one short line per item, no tables (Telegram won't render them). */
+function approvalPackage(post: Post, withButtons: boolean) {
   const fixes = post.checks.filter((c) => c.fixed).map((c) => c.fixed);
   const caption = post.captions[0];
   return [
@@ -369,38 +474,58 @@ function approvalPackage(post: Post) {
     caption ? `Caption (${caption.lang}):\n${caption.text}` : "",
     post.captions.length > 1 ? `(+ ${post.captions.slice(1).map((c) => c.lang).join(", ")} versions)` : "",
     "",
-    `Reply: approve ${postRef(post)}  ·  change ${postRef(post)}: <what>`,
+    withButtons
+      ? "Tap a button below — or reply in the studio's Approvals."
+      : `Reply here:\n✅ approve ${postRef(post)}\n✏️ change ${postRef(post)}: <what to change>\n⛔ reject ${postRef(post)}`,
   ]
     .filter((l, i, a) => l !== "" || a[i - 1] !== "")
     .join("\n")
     .slice(0, 3900); // Telegram splits above 4096
 }
 
-/** Post into the client's approvals room through Switch; never fails the workflow. */
-async function announce(post: Post, text: string) {
+/**
+ * A status line for the company's Telegram: its own connected group (through Bolo's bot), else the
+ * Switch approvals room. Neither connected → skipped quietly. Never fails the workflow.
+ */
+async function announce(post: Post, text: string, opts: { buttons?: boolean } = {}) {
   const client = loadClient(post.clientId);
   if (!client) return;
-  const delivery = await postToRoom(client.rooms.approvals, text);
+  const chat = chatFor(client.id, client.rooms.approvals);
+  let delivery: Delivery;
+  let where: string;
+  if (chat?.own) {
+    delivery = await sendText(chat.chatId, text, opts.buttons ? { reply_markup: approvalButtons(post.id) } : {});
+    where = "Telegram";
+  } else if (switchConfig().configured && client.rooms.approvals) {
+    delivery = await postToRoom(client.rooms.approvals, text);
+    where = client.rooms.approvals;
+  } else return;
   if (!delivery.ok) {
     // Make a missed delivery visible on the post instead of failing silently
     await updateStore((data) => {
       const p = data.posts.find((x) => x.id === post.id);
-      p?.thread.push({ from: "Switch", text: `⚠ Not delivered to ${client.rooms.approvals}: ${delivery.reason}`, at: nowIso() });
+      p?.thread.push({ from: "Telegram", text: `⚠ Not delivered to ${where}: ${delivery.reason}`, at: nowIso() });
     });
   }
 }
 
-/** Post the approval package to the client's Telegram room again (e.g. it wasn't delivered). */
+/** Send the approval package to the company's Telegram again (e.g. it wasn't delivered). */
 export async function resendApproval(id: string) {
   const post = findPost(readStore(), id);
   if (post.status !== "awaiting") throw new WorkflowError(409, "Only posts waiting for approval can be resent.");
   const client = requireClient(post.clientId);
-  await sendMediaFirst(post, client.rooms.approvals);
-  const delivery = await postToRoom(client.rooms.approvals, approvalPackage(post));
+  const chat = chatFor(client.id, client.rooms.approvals);
+  if (!chat && !(switchConfig().configured && findRoomByName(client.rooms.approvals))) {
+    throw new WorkflowError(409, "Telegram isn't connected for this company — connect it in Connections, or approve in the studio.");
+  }
+  await sendMediaFirst(post, client);
+  const delivery = chat?.own
+    ? await sendText(chat.chatId, approvalPackage(post, true), { reply_markup: approvalButtons(post.id) })
+    : await postToRoom(client.rooms.approvals, approvalPackage(post, false));
   if (!delivery.ok) throw new WorkflowError(409, `Not delivered: ${delivery.reason}`);
   return updateStore((data) => {
     const p = findPost(data, id);
-    p.thread.push({ from: "Brand Guard", text: `Resent to ${client.rooms.approvals}.`, at: nowIso() });
+    p.thread.push({ from: "Brand Guard", text: "Resent to Telegram.", at: nowIso() });
     return p;
   });
 }
@@ -409,24 +534,28 @@ export async function resendApproval(id: string) {
  * A message from the client's Telegram approvals room (relayed by Switch), or an approver
  * acting from the dashboard. "approve" schedules the post; "change: …" sends it back.
  */
-export async function clientReply(id: string, input: { handle: string; text: string; via?: "telegram" | "dashboard" }) {
+export async function clientReply(id: string, input: Actor & { text: string; via?: "telegram" | "dashboard" }) {
   const text = input.text.trim();
   const snapshot = findPost(readStore(), id);
   const client = requireClient(snapshot.clientId);
-  const approver = findApprover(client, input.handle);
+  const approver = findApprover(client, input);
+  const who = approver?.name ?? input.name ?? input.handle ?? "Someone";
 
-  if (/^approve\b/i.test(text)) return approve(id, input.handle, input.via);
+  if (/^approve\b/i.test(text)) return approve(id, input, input.via);
+  const reject = text.match(/^reject\b(?:\s*#\w+)?\s*:?\s*([\s\S]*)$/i);
+  if (reject) return rejectPost(id, input, reject[1].trim(), input.via);
 
   const change = text.match(/^change\b(?:\s*#\w+)?\s*:\s*([\s\S]+)$/i);
-  if (change && !approver) throw new WorkflowError(403, "Only approvers listed in protocol.md can request changes.");
+  if (change && !approver) throw new WorkflowError(403, "Only this company's approvers can request changes.");
 
   const post = await updateStore((data) => {
     const post = findPost(data, id);
-    post.thread.push({ from: approver?.name ?? input.handle, text, at: nowIso(), client: true });
+    post.thread.push({ from: who, text, at: nowIso(), client: true });
     if (change && post.status === "awaiting") {
       post.status = "draft";
       post.note = `Change requested: ${change[1].trim()}`;
       post.thread.push({ from: "Brand Guard", text: "Noted → sent back to the right agent. I'll re-check and resend.", at: nowIso() });
+      tellTeam(data, post, { kind: "changes", title: `${who} asked for changes: ${post.title}`, body: change[1].trim() });
     }
     post.updatedAt = nowIso();
     return post;
@@ -435,35 +564,63 @@ export async function clientReply(id: string, input: { handle: string; text: str
     await announce(post, `Noted ${postRef(post)} → sent back to the team: “${change[1].trim()}”. I'll re-check and resend.`);
     await toWorkRoom(
       post,
-      `✏️ ${approver?.name ?? input.handle} asked for changes on ${postRef(post)} ${post.title}: “${change[1].trim()}”\n@${agentName("writer")} please update it (bolo show ${postRef(post)}), then bolo submit ${postRef(post)}`,
+      `✏️ ${who} asked for changes on ${postRef(post)} ${post.title}: “${change[1].trim()}”\n@${agentName("writer")} please update it (bolo show ${postRef(post)}), then bolo submit ${postRef(post)}`,
     );
   }
   return post;
 }
 
-export async function approve(id: string, handle: string, via: "telegram" | "dashboard" = "telegram") {
+/** Notify the post's author and the company's owners/admins (inside a running updateStore). */
+function tellTeam(data: StudioData, post: Post, n: { kind: Parameters<typeof pushNotification>[2]["kind"]; title: string; body?: string }, except?: string) {
+  const ids = new Set([post.createdBy, ...managersOf(post.clientId)].filter((x): x is string => Boolean(x) && x !== except));
+  for (const userId of ids) pushNotification(data, userId, { ...n, companyId: post.clientId, href: `/studio/${post.clientId}/post/${post.id}` });
+}
+
+/** An approver turns the post down: it goes back to production with the reason, nothing is scheduled. */
+export async function rejectPost(id: string, who: Actor, reason: string, via: "telegram" | "dashboard" = "dashboard") {
   const snapshot = findPost(readStore(), id);
   const client = requireClient(snapshot.clientId);
-  const approver = findApprover(client, handle);
-  if (!approver) throw new WorkflowError(403, "Only approvers listed in protocol.md can approve.");
+  const approver = findApprover(client, who);
+  if (!approver) throw new WorkflowError(403, "Only this company's approvers can reject a post.");
+  if (snapshot.status !== "awaiting") throw new WorkflowError(409, "This post isn't waiting for approval.");
+  const post = await updateStore((data) => {
+    const post = findPost(data, id);
+    post.status = "draft";
+    post.note = `Rejected by ${approver.name}${reason ? `: ${reason}` : ""}`;
+    post.thread.push({ from: approver.name, text: `reject${reason ? `: ${reason}` : ""}${via === "dashboard" ? " (from the studio)" : ""}`, at: nowIso(), client: true });
+    post.updatedAt = nowIso();
+    tellTeam(data, post, { kind: "changes", title: `${approver.name} rejected ${post.title}`, body: reason || undefined }, approver.userId);
+    return post;
+  });
+  await toWorkRoom(post, `⛔ ${approver.name} rejected ${postRef(post)} ${post.title}${reason ? `: “${reason}”` : ""}.`);
+  return post;
+}
+
+export async function approve(id: string, who: string | Actor, via: "telegram" | "dashboard" = "telegram") {
+  const snapshot = findPost(readStore(), id);
+  const client = requireClient(snapshot.clientId);
+  const approver = findApprover(client, who);
+  if (!approver) throw new WorkflowError(403, "Only this company's approvers can approve.");
   if (snapshot.status !== "awaiting") throw new WorkflowError(409, "This post isn't waiting for approval.");
 
-  // Call Postiz outside the store lock; then record the result.
-  const result = await schedulePost(snapshot, client);
+  // Decide how it goes out (direct / Postiz / dry run) outside the store lock; then record it.
+  const result = await planPublish(snapshot, client);
 
   const post = await updateStore((data) => {
     const post = findPost(data, id);
     post.status = "scheduled";
     post.postizId = result.postizId;
     post.dryRun = result.dryRun;
-    post.note = undefined;
+    post.publish = { via: result.via };
+    post.note = result.skipped?.length ? `Not connected, so not posted there: ${result.skipped.join(", ")}` : undefined;
     post.updatedAt = nowIso();
-    post.thread.push({ from: approver.name, text: via === "dashboard" ? "approve (from dashboard)" : "approve", at: nowIso(), client: true });
+    post.thread.push({ from: approver.name, text: via === "dashboard" ? "approve (from the studio)" : "approve", at: nowIso(), client: true });
     post.thread.push({
       from: "Publisher",
-      text: `Scheduled ✅ ${schedSummary(post)}${result.dryRun ? ` (dry run — ${result.reason})` : ""}`,
+      text: `Scheduled ✅ ${schedSummary(post)}${result.via === "direct" ? " — Bolo posts it at that time" : result.dryRun ? ` (dry run — ${result.reason})` : " via Postiz"}`,
       at: nowIso(),
     });
+    tellTeam(data, post, { kind: "approved", title: `Approved: ${post.title}`, body: `${approver.name} approved it — goes out ${formatSlot(post.scheduledAt)} IST. It's in Drafts until then.` }, approver.userId);
     return post;
   });
   await announce(post, `Scheduled ✅ ${post.title} ${postRef(post)}\n${schedSummary(post)} IST${result.dryRun ? "\n(dry run — not sent to Postiz)" : ""}`);
@@ -487,6 +644,7 @@ export async function markLive(input: { postId?: string; postizId?: string; perm
     post.permalink = input.permalink;
     post.updatedAt = nowIso();
     post.thread.push({ from: "Publisher", text: `Live 🎉 ${input.permalink ?? "(no link reported)"}`, at: nowIso() });
+    tellTeam(data, post, { kind: "live", title: `Posted: ${post.title}`, body: post.permalink ?? `${post.platforms.map((x) => PLATFORM_SHORT[x]).join(" + ")} · it's on the calendar now.` });
     return post;
   });
   await announce(post, `Live 🎉 ${post.title}${post.permalink ? `\n${post.permalink}` : ""}`);

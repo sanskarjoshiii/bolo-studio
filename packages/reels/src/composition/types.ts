@@ -25,6 +25,8 @@ export type ReelProps = {
   end: { title: string; cta: string; footnote: string; frames: number };
   /** Background music URL (brand-kits/<client>/music.mp3), mixed quietly under the voice. */
   music?: string;
+  /** Output size; the template scales to it. Default 1080 × 1920. */
+  size?: { w: number; h: number };
 };
 
 export const FPS = 30;

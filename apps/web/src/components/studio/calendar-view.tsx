@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -33,9 +34,13 @@ export function CalendarView({
   today,
   filter,
   selectedId,
+  pending,
 }: {
   client: Client;
+  /** Published posts only. */
   posts: Post[];
+  /** How many are approved (Drafts) and waiting (Approvals) — linked from the header. */
+  pending: { drafts: number; approvals: number };
   mode: CalendarMode;
   /** Day shown (day mode), Monday of the week (week mode) or 1st of the month (month mode). */
   anchor: string;
@@ -105,22 +110,21 @@ export function CalendarView({
           />
         </div>
 
-        <div className="no-scrollbar order-last -mx-1 flex w-full gap-1 overflow-x-auto">
-          {(["all", ...STATUS_ORDER] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => go({ status: f === "all" ? null : f })}
-              className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px] transition-colors",
-                filter === f ? "bg-white/[0.09] text-white" : "text-fog hover:text-white",
-              )}
-            >
-              {f !== "all" && <span className={cn("size-1.5 rounded-full", STATUS_META[f].dot)} />}
-              {f === "all" ? "All" : STATUS_META[f].label}
-              <span className="text-white/40 tabular-nums">{f === "all" ? posts.length : counts[f]}</span>
-            </button>
-          ))}
-        </div>
+        <p className="order-last flex w-full flex-wrap items-center gap-x-1.5 text-[12px] text-fog">
+          <span className={cn("size-1.5 rounded-full", STATUS_META.live.dot)} />
+          {counts.live} published {counts.live === 1 ? "post" : "posts"} — the calendar shows only what&apos;s live on social media.
+          {pending.drafts > 0 && (
+            <Link href={`/studio/${client.id}/drafts`} className="text-lime hover:underline">
+              {pending.drafts} approved in Drafts
+            </Link>
+          )}
+          {pending.drafts > 0 && pending.approvals > 0 && <span>·</span>}
+          {pending.approvals > 0 && (
+            <Link href={`/studio/${client.id}/approvals`} className="text-lime hover:underline">
+              {pending.approvals} in Approvals
+            </Link>
+          )}
+        </p>
       </div>
 
       {mode === "month" ? (

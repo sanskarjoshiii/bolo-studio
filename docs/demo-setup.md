@@ -46,6 +46,11 @@ Page** (Instagram app → Settings → Account type and tools; then link the Pag
    META_APP_ID=...
    META_APP_SECRET=...
    ```
+   Business apps: **Facebook Login for Business → Configurations → Create configuration**
+   (login variation *General*, token *User access token*, the permissions above) → copy its ID:
+   ```
+   META_CONFIG_ID=...
+   ```
 5. Connect with the **same Facebook account that created the app** (or add the demo account in
    **App roles → Testers**). Strangers can't connect until Meta's App Review — not needed for the demo.
 

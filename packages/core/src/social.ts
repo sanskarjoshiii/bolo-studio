@@ -29,7 +29,16 @@ export const metaRedirectUri = () => `${webUrl()}/api/connect/meta/callback`;
 
 export function metaAuthUrl(state: string) {
   if (!metaConfigured()) throw new WorkflowError(409, "Facebook & Instagram aren't available yet — the Bolo Studio admin needs to add the Meta app (META_APP_ID / SECRET).");
-  const q = new URLSearchParams({ client_id: setting("META_APP_ID"), redirect_uri: metaRedirectUri(), state, response_type: "code", scope: META_SCOPES.join(",") });
+  // Business apps ("Facebook Login for Business") log in with a configuration made in the App
+  // Dashboard, which lists the permissions; other apps pass the permissions directly.
+  const configId = setting("META_CONFIG_ID");
+  const q = new URLSearchParams({
+    client_id: setting("META_APP_ID"),
+    redirect_uri: metaRedirectUri(),
+    state,
+    response_type: "code",
+    ...(configId ? { config_id: configId, override_default_response_type: "true" } : { scope: META_SCOPES.join(",") }),
+  });
   return `https://www.facebook.com/${setting("META_GRAPH_VERSION") || "v23.0"}/dialog/oauth?${q}`;
 }
 

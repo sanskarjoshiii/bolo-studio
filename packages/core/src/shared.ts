@@ -113,6 +113,75 @@ export const FORMAT_INFO = {
   Reel: { label: "Reel", ratio: "9:16", size: "1080 × 1920 video", platforms: ["instagram", "facebook", "youtube"], video: true },
 } as const satisfies Record<(typeof FORMATS)[number], { label: string; ratio: string; size: string; platforms: readonly string[]; video: boolean }>;
 
+/**
+ * Output sizes offered for every post, carousel, story and reel (plus Custom). Pixel sizes are the
+ * ones each platform recommends; video sizes are even numbers, as H.264 requires.
+ */
+export const SIZE_PRESETS = [
+  { id: "portrait", label: "Portrait 4:5", hint: "Instagram & Facebook feed", w: 1080, h: 1350 },
+  { id: "square", label: "Square 1:1", hint: "Feed, LinkedIn, Facebook", w: 1080, h: 1080 },
+  { id: "vertical", label: "Vertical 9:16", hint: "Stories, Reels, Shorts", w: 1080, h: 1920 },
+  { id: "tall", label: "Tall 3:4", hint: "Instagram grid", w: 1080, h: 1440 },
+  { id: "landscape", label: "Landscape 1.91:1", hint: "Instagram & Facebook link posts", w: 1080, h: 566 },
+  { id: "linkedin", label: "LinkedIn 1.91:1", hint: "LinkedIn feed image", w: 1200, h: 628 },
+  { id: "facebook", label: "Facebook cover", hint: "Facebook page cover", w: 1640, h: 624 },
+  { id: "wide", label: "Widescreen 16:9", hint: "YouTube video, presentations", w: 1920, h: 1080 },
+  { id: "youtube-thumb", label: "YouTube thumbnail", hint: "16:9 thumbnail", w: 1280, h: 720 },
+  { id: "pinterest", label: "Pinterest 2:3", hint: "Pins and posters", w: 1000, h: 1500 },
+] as const;
+export type SizePresetId = (typeof SIZE_PRESETS)[number]["id"];
+
+/** The size a format renders at when nobody picked one. */
+export const DEFAULT_SIZE: Record<(typeof FORMATS)[number], { w: number; h: number; preset: SizePresetId }> = {
+  Post: { w: 1080, h: 1350, preset: "portrait" },
+  Carousel: { w: 1080, h: 1350, preset: "portrait" },
+  Story: { w: 1080, h: 1920, preset: "vertical" },
+  Reel: { w: 1080, h: 1920, preset: "vertical" },
+};
+
+/** The post's render size: the one picked, else the format's default. */
+export function sizeFor(p: { format: (typeof FORMATS)[number]; size?: { w: number; h: number; preset?: string } }) {
+  return p.size?.w && p.size?.h ? { w: p.size.w, h: p.size.h, preset: p.size.preset } : DEFAULT_SIZE[p.format];
+}
+
+/**
+ * Normalise a requested size: integers 320–4096 px. Videos (reels, story videos) get even numbers
+ * and at most 1920 on the short side — what H.264 encoders and the platforms accept.
+ */
+export function validSize(s: { w: number; h: number; preset?: string }, video: boolean): { w: number; h: number; preset?: string } | null {
+  let w = Math.round(Number(s.w));
+  let h = Math.round(Number(s.h));
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w < 320 || h < 320 || w > 4096 || h > 4096) return null;
+  if (video) {
+    if (Math.min(w, h) > 1920) return null;
+    w -= w % 2;
+    h -= h % 2;
+  }
+  const preset = SIZE_PRESETS.find((p) => p.id === s.preset && p.w === w && p.h === h)?.id ?? (s.preset === "custom" ? "custom" : SIZE_PRESETS.find((p) => p.w === w && p.h === h)?.id ?? "custom");
+  return { w, h, preset };
+}
+
+/** Language plans. The first language leads: it's the reel voice and the first caption. */
+export const LANGUAGE_OPTIONS = [
+  { id: "mr+en", label: "Marathi + English", langs: ["mr", "en"] },
+  { id: "hi+en", label: "Hindi + English", langs: ["hi", "en"] },
+  { id: "hi+mr", label: "Hindi + Marathi", langs: ["hi", "mr"] },
+  { id: "mr", label: "Marathi", langs: ["mr"] },
+  { id: "hi", label: "Hindi", langs: ["hi"] },
+  { id: "en", label: "English", langs: ["en"] },
+] as const;
+export const LANGUAGE_IDS = LANGUAGE_OPTIONS.map((l) => l.id) as string[];
+
+export const LANG_NAME = { mr: "Marathi", hi: "Hindi", en: "English" } as const;
+/** Caption tab labels the studio and Brand Guard show. */
+export const LANG_LABEL = { mr: "मराठी", hi: "हिंदी", en: "EN" } as const;
+/** Sarvam voice codes. */
+export const VOICE_CODE = { mr: "mr-IN", hi: "hi-IN", en: "en-IN" } as const;
+
+export function languagePlan(id?: string) {
+  return LANGUAGE_OPTIONS.find((l) => l.id === id) ?? null;
+}
+
 /** Designed layouts for posts, stories and carousel covers (apps/web brand-creative.tsx draws them). */
 export const LAYOUTS = {
   hero: { label: "Photo hero", hint: "Full-bleed photo, headline over a brand gradient — best with a real photo" },

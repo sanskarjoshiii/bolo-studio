@@ -1,6 +1,6 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { Agent, Approver, BrandChecks, Channel, Client } from "./types";
+import type { Agent, Approver, BrandChecks, BrandKitFile, Client, ClientMeta, MemberInfo } from "./types";
 
 let root: string | null = null;
 
@@ -82,52 +82,101 @@ export function parseChecks(rules: string): BrandChecks {
 
 const KIT_ORDER = ["brand.md", "rules.md", "protocol.md", "audience.md", "products.md", "examples.md", "reel-style.md", "tokens.json"];
 
-export function loadClient(id: string): Client | null {
-  const dir = join(repoRoot(), "brand-kits", id);
-  const metaPath = join(dir, "client.json");
-  if (!existsSync(metaPath)) return null;
+export const sortKitFiles = (files: BrandKitFile[]) =>
+  [...files].sort((a, b) => (KIT_ORDER.indexOf(a.name) + 1 || 99) - (KIT_ORDER.indexOf(b.name) + 1 || 99));
 
-  const meta = JSON.parse(readFileSync(metaPath, "utf8")) as {
-    name: string;
-    short: string;
-    sector: string;
-    mark: Client["mark"];
-    rooms: Client["rooms"];
-    channels: Channel[];
-  };
-  const read = (f: string) => (existsSync(join(dir, f)) ? readFileSync(join(dir, f), "utf8") : "");
+/** A Brand Kit (client.json + its files) → the Client everything else works with. Pure. */
+export function parseKit(id: string, meta: ClientMeta, files: BrandKitFile[], members: MemberInfo[] = []): Client {
+  const read = (f: string) => files.find((x) => x.name === f)?.content ?? "";
   const protocol = read("protocol.md");
   const products = read("products.md") || read("services.md");
-
-  const files = readdirSync(dir)
-    .filter((f) => f !== "client.json" && /\.(md|json)$/.test(f))
-    .sort((a, b) => (KIT_ORDER.indexOf(a) + 1 || 99) - (KIT_ORDER.indexOf(b) + 1 || 99))
-    .map((name) => ({ name, content: read(name) }));
-
+  let checks: BrandChecks = {};
+  try {
+    checks = parseChecks(read("rules.md"));
+  } catch {
+    checks = {}; // a broken bolo-checks block must not take the whole studio down — the Brand Kit page shows it
+  }
   return {
     id,
     ...meta,
+    channels: meta.channels ?? [],
+    rooms: meta.rooms ?? { work: "", approvals: "" },
     approvers: parseApprovers(protocol),
     platforms: parsePlatforms(protocol),
     bestTimes: parseBestTimes(protocol),
     products: parseProducts(products),
     reraNumbers: parseRera(products),
-    checks: parseChecks(read("rules.md")),
-    files,
+    checks,
+    files: sortKitFiles(files),
+    members,
+    telegramApprovers: [],
+    groupApproves: false,
   };
 }
 
-/** Pushpam first so the demo opens on the richest kit. */
-const CLIENT_ORDER = ["pushpam-demo", "clinic-demo", "my-brand"];
+export const kitsDir = () => join(repoRoot(), "brand-kits");
 
-export function listClients(): Client[] {
-  const dir = join(repoRoot(), "brand-kits");
+/** Read a Brand Kit folder from disk (the demo kits, and kits added by hand). */
+export function readDiskKit(id: string): { meta: ClientMeta; files: BrandKitFile[] } | null {
+  const dir = join(kitsDir(), id);
+  const metaPath = join(dir, "client.json");
+  if (!existsSync(metaPath)) return null;
+  const meta = JSON.parse(readFileSync(metaPath, "utf8")) as ClientMeta;
+  const files = readdirSync(dir)
+    .filter((f) => f !== "client.json" && /\.(md|json)$/.test(f))
+    .map((name) => ({ name, content: readFileSync(join(dir, name), "utf8") }));
+  return { meta, files: sortKitFiles(files) };
+}
+
+/** Pushpam first so the demo opens on the richest kit. */
+export const CLIENT_ORDER = ["pushpam-demo", "clinic-demo", "my-brand"];
+
+export function diskKitIds(): string[] {
+  const dir = kitsDir();
+  if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
+    .filter((d) => d.isDirectory() && existsSync(join(dir, d.name, "client.json")))
     .map((d) => d.name)
-    .sort((a, b) => (CLIENT_ORDER.indexOf(a) + 1 || 99) - (CLIENT_ORDER.indexOf(b) + 1 || 99))
-    .map(loadClient)
+    .sort((a, b) => (CLIENT_ORDER.indexOf(a) + 1 || 99) - (CLIENT_ORDER.indexOf(b) + 1 || 99));
+}
+
+/** Clients straight from the brand-kits/ folders — used to build the first store (seed). */
+export function listDiskClients(): Client[] {
+  return diskKitIds()
+    .map((id) => {
+      const kit = readDiskKit(id);
+      return kit ? parseKit(id, kit.meta, kit.files) : null;
+    })
     .filter((c): c is Client => c !== null);
+}
+
+/**
+ * Where an agent reads a company's Brand Kit: brand-kits/<id>/ for the kits that ship in the repo,
+ * <data>/brand-kits/<id>/ for companies created in the studio (never inside the source tree).
+ */
+export function kitDirFor(id: string) {
+  const repoKit = join(kitsDir(), id);
+  if (existsSync(join(repoKit, "client.json"))) return repoKit;
+  return join(process.env.BOLO_DATA_DIR ?? join(repoRoot(), "data"), "brand-kits", id);
+}
+
+/**
+ * Write a company's Brand Kit to its folder so the Switch content agents (which read files) see
+ * edits made in the studio. Best effort — the store is the source of truth.
+ */
+export function writeDiskKit(id: string, kit: { meta: ClientMeta; files: BrandKitFile[] }) {
+  if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(id)) return;
+  const dir = kitDirFor(id);
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "client.json"), `${JSON.stringify(kit.meta, null, 2)}\n`);
+    for (const f of kit.files) {
+      if (!/^[\w.-]+\.(md|json)$/.test(f.name)) continue;
+      writeFileSync(join(dir, f.name), f.content);
+    }
+  } catch (e) {
+    console.error(`brand-kits/${id}: not written (${(e as Error).message})`);
+  }
 }
 
 const AGENT_ORDER = ["strategist", "copywriter", "visual-designer", "reel-producer", "brand-guard", "publisher"];

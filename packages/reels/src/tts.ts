@@ -1,18 +1,19 @@
-import { setting, WorkflowError } from "@bolo/core";
+import { sarvamKey, WorkflowError } from "@bolo/core";
 
 // Sarvam AI text-to-speech — https://docs.sarvam.ai/api-reference-docs/text-to-speech/convert
 // Indian-language voices (Marathi, Hindi, English and code-mixed text) for reel voiceovers.
 
 export const SARVAM_LANGS = ["bn-IN", "en-IN", "gu-IN", "hi-IN", "kn-IN", "ml-IN", "mr-IN", "od-IN", "pa-IN", "ta-IN", "te-IN"];
 
-export function ttsConfigured() {
-  return Boolean(setting("SARVAM_API_KEY"));
+/** Voiceover is available: the company's own Sarvam key, or the platform's. */
+export function ttsConfigured(companyId?: string) {
+  return Boolean(sarvamKey(companyId));
 }
 
 /** One voice clip as WAV bytes. */
-export async function speak(text: string, opts: { lang: string; speaker?: string }) {
-  const key = setting("SARVAM_API_KEY");
-  if (!key) throw new WorkflowError(409, "SARVAM_API_KEY isn't set in .env — add it, or render the reel without voice.");
+export async function speak(text: string, opts: { lang: string; speaker?: string; companyId?: string }) {
+  const key = sarvamKey(opts.companyId);
+  if (!key) throw new WorkflowError(409, "Sarvam AI isn't connected — Connections → Sarvam AI, or render the reel without voice.");
   if (!SARVAM_LANGS.includes(opts.lang)) throw new WorkflowError(400, `Voice language must be one of ${SARVAM_LANGS.join(", ")}.`);
 
   const res = await fetch("https://api.sarvam.ai/text-to-speech", {

@@ -5,7 +5,8 @@ import { Loader2 } from "lucide-react";
 import { api } from "@/components/studio/hooks";
 import { ErrorNote } from "@/components/studio/controls";
 
-export function LoginForm({ setup, next }: { setup: boolean; next: string }) {
+export function LoginForm({ mode, next }: { mode: "login" | "setup" | "signup"; next: string }) {
+  const setup = mode !== "login";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,7 +17,7 @@ export function LoginForm({ setup, next }: { setup: boolean; next: string }) {
     setBusy(true);
     setError(null);
     try {
-      await api(setup ? "/api/auth/setup" : "/api/auth/login", "POST", f);
+      await api(mode === "setup" ? "/api/auth/setup" : mode === "signup" ? "/api/auth/signup" : "/api/auth/login", "POST", f);
       window.location.assign(next);
     } catch (err) {
       setError((err as Error).message);
@@ -27,6 +28,7 @@ export function LoginForm({ setup, next }: { setup: boolean; next: string }) {
   return (
     <form onSubmit={submit} className="mt-6 space-y-3">
       {setup && <Field name="name" label="Your name" autoComplete="name" required />}
+      {mode === "signup" && <Field name="username" label="Username — teammates add you by this" autoComplete="username" placeholder="asha.k" pattern="[A-Za-z0-9][A-Za-z0-9_.]{2,23}" title="3–24 letters, numbers, dots or underscores" required />}
       <Field name="email" type="email" label="Email" autoComplete="email" required />
       <Field name="password" type="password" label="Password" autoComplete={setup ? "new-password" : "current-password"} required minLength={setup ? 8 : undefined} />
       {setup && (
@@ -42,7 +44,7 @@ export function LoginForm({ setup, next }: { setup: boolean; next: string }) {
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-lime py-2.5 text-[14px] font-medium text-night hover:brightness-95 disabled:opacity-60"
       >
         {busy && <Loader2 className="size-4 animate-spin" />}
-        {setup ? "Create account" : "Sign in"}
+        {mode === "login" ? "Sign in" : "Create account"}
       </button>
     </form>
   );

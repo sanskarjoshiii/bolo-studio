@@ -18,7 +18,8 @@
     "data:reset": "npm run reset -w @bolo/core",
     "bolo": "tsx packages/cli/src/index.ts",
     "agents:setup": "tsx packages/cli/src/setup-agents.ts",
-    "studio": "node scripts/studio.mjs"
+    "studio": "node scripts/studio.mjs",
+    "demo": "node scripts/studio.mjs --prod"
   },
   "engines": {
     "node": ">=20.9"

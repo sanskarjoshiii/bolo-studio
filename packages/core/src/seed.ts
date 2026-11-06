@@ -1,7 +1,7 @@
-import { listClients } from "./brand-kit";
+import { diskKitIds, listDiskClients, readDiskKit } from "./brand-kit";
 import { runBrandGuard } from "./brand-guard";
 import { addDays, istIso, weekStart } from "./shared";
-import type { Caption, Client, ClientSettings, Platform, Post, PostFormat, PostStatus, StudioData, ThreadMsg } from "./types";
+import type { Caption, Client, ClientSettings, Company, Platform, Post, PostFormat, PostStatus, StudioData, ThreadMsg } from "./types";
 
 // Demo week, generated relative to the current IST week so the dashboard
 // always opens on live-looking data. Checks come from the real Brand Guard.
@@ -277,7 +277,7 @@ const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 
 export function buildSeed(now = new Date()): StudioData {
   const monday = weekStart(now);
-  const clients = new Map<string, Client>(listClients().map((c) => [c.id, c]));
+  const clients = new Map<string, Client>(listDiskClients().map((c) => [c.id, c]));
   const at = (day: number, time: string) => istIso(addDays(monday, day), toMin(time));
 
   const posts: Post[] = SEED.filter((s) => clients.has(s.client)).map((s) => {
@@ -318,5 +318,9 @@ export function buildSeed(now = new Date()): StudioData {
   });
 
   const settings = Object.fromEntries([...clients.keys()].map((id) => [id, { ...DEFAULT_SETTINGS }]));
-  return { version: 1, posts, settings };
+  const companies: Company[] = diskKitIds().flatMap((id) => {
+    const kit = readDiskKit(id);
+    return kit ? [{ id, kit, members: [], connections: {}, createdAt: now.toISOString() }] : [];
+  });
+  return { version: 3, posts, settings, companies, invites: [], notifications: [], users: [] };
 }

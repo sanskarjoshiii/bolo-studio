@@ -69,7 +69,7 @@ test("what gets published per format", () => {
 });
 
 test("Telegram: album for carousel slides, sent to the group id Switch reported", async () => {
-  resetStore();
+  await resetStore();
   const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
   await media.addMedia("pp-sitevisit", { name: "s1.png", type: "image/png", bytes: PNG });
   const post = await media.addMedia("pp-sitevisit", { name: "s2.png", type: "image/png", bytes: PNG });

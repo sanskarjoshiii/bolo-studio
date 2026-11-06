@@ -3,7 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import type { Client, Media, Post } from "@bolo/core";
-import { brandTokens } from "@bolo/core/shared";
+import { brandTokens, sizeFor } from "@bolo/core/shared";
 import { contentFromPost, MiniCreative, toVariant } from "@/components/ui/mini-creative";
 import { BrandCreative, photoIndex, postDesign } from "@/components/ui/brand-creative";
 import { mediaUrl } from "./post-drawer";
@@ -18,11 +18,12 @@ export function PhonePreview({
   client,
   className,
 }: {
-  post: Pick<Post, "id" | "title" | "creativeText" | "format" | "slides" | "creative" | "media" | "captions" | "layout">;
+  post: Pick<Post, "id" | "title" | "creativeText" | "format" | "slides" | "creative" | "media" | "captions" | "layout" | "size" | "design" | "languages">;
   client: Pick<Client, "short" | "name" | "mark" | "products" | "files">;
   className?: string;
 }) {
   const vertical = post.format === "Story" || post.format === "Reel";
+  const size = sizeFor(post);
   const video = (post.media ?? []).filter((m) => m.kind === "video").at(-1);
   const allImages = (post.media ?? []).filter((m) => m.kind === "image");
   const photos = allImages.filter((m) => m.source !== "template");
@@ -50,7 +51,7 @@ export function PhonePreview({
           <span className="truncate text-[11px] font-medium text-white">{client.short}</span>
           <span className="ml-auto rounded bg-white/10 px-1.5 py-0.5 text-[9.5px] text-white/70">{post.format}</span>
         </div>
-        <div className={cn("relative overflow-hidden rounded-[22px] bg-black", vertical ? "aspect-[9/16]" : "aspect-[4/5]")}>
+        <div className="relative overflow-hidden rounded-[22px] bg-black" style={{ aspectRatio: `${size.w} / ${size.h}` }}>
           {frame.kind === "media" ? (
             frame.media.kind === "video" ? (
               <video key={frame.media.file} src={mediaUrl(post as Post, frame.media)} controls playsInline className="size-full object-cover" />
@@ -105,7 +106,7 @@ function TemplateFrame({
   photos,
   slide,
 }: {
-  post: Pick<Post, "id" | "title" | "creativeText" | "format" | "slides" | "creative" | "layout">;
+  post: Pick<Post, "id" | "title" | "creativeText" | "format" | "slides" | "creative" | "layout" | "size" | "design">;
   client: Pick<Client, "short" | "name" | "mark" | "products" | "files">;
   photos: Media[];
   slide: number;

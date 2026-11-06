@@ -1,5 +1,7 @@
 import { Clapperboard, Compass, Palette, PenLine, Send, ShieldCheck, type LucideIcon } from "lucide-react";
+import { notFound } from "next/navigation";
 import { listAgents, loadClient } from "@bolo/core";
+import { requireUserPage } from "@/lib/auth";
 
 const ICONS: Record<string, LucideIcon> = {
   strategist: Compass,
@@ -12,6 +14,8 @@ const ICONS: Record<string, LucideIcon> = {
 
 export default async function AgentsPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;
+  const me = await requireUserPage(`/studio/${clientId}/agents`);
+  if (me.role !== "admin") notFound(); // the agents are Bolo Studio's own (platform service)
   const client = loadClient(clientId)!;
   const agents = listAgents();
 

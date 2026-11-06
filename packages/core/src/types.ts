@@ -1,3 +1,5 @@
+import type { StoredUser } from "./users";
+
 export type Platform = "instagram" | "facebook" | "linkedin" | "youtube";
 
 /**
@@ -14,6 +16,12 @@ export type PostStatus = "draft" | "brand-check" | "awaiting" | "scheduled" | "l
  * Stories carry no caption on Instagram — their text lives on the creative.
  */
 export type PostFormat = "Post" | "Carousel" | "Story" | "Reel";
+
+/** Output size of the rendered image or video, in pixels. `preset` names one of SIZE_PRESETS (shared.ts). */
+export type Size = { w: number; h: number; preset?: string };
+
+/** Language plan for a post: captions, text on the creative and the reel voice (shared.ts LANGUAGE_OPTIONS). */
+export type LanguageOption = "mr+en" | "hi+en" | "hi+mr" | "mr" | "hi" | "en";
 
 /** One carousel slide: headline printed big, optional supporting line. */
 export type Slide = { headline: string; text?: string };
@@ -56,6 +64,9 @@ export type Media = {
   source?: "template" | "upload";
   /** For template renders: creativeTextHash of the text it printed. */
   textHash?: string;
+  /** Pixel size of a rendered file (template renders). */
+  w?: number;
+  h?: number;
 };
 
 export type Post = {
@@ -81,8 +92,19 @@ export type Post = {
   reel?: ReelScript;
   /** Carousel slides (slide 1 is the cover). Rendered one PNG per slide. */
   slides?: Slide[];
-  /** Automatic production in progress (Claude writing, rendering, sending) — shown live in the editor. */
-  job?: { step: string; at: string };
+  /** Pixel size of the rendered media; empty → the format's default (FORMAT_INFO). */
+  size?: Size;
+  /** Languages to write in; empty → the Brand Kit's usual languages. */
+  languages?: LanguageOption;
+  /** Art direction from the writer: the headline word set in the accent colour, and the button label. */
+  design?: { highlight?: string; cta?: string };
+  /**
+   * Automatic production in progress (AI writing, rendering, sending) — shown live in the editor
+   * and in the progress dock. `progress` is 0–100; `startedAt` is when the whole run began.
+   */
+  job?: { step: string; at: string; progress?: number; startedAt?: string; by?: string };
+  /** User id of whoever created it (notifications go to them). */
+  createdBy?: string;
   /** Brief from the Strategist (goal, audience, notes) — free text shown to the team. */
   brief?: string;
   checks: CheckResult[];
@@ -91,12 +113,30 @@ export type Post = {
   note?: string;
   postizId?: string;
   dryRun?: boolean;
+  /**
+   * How an approved post goes out: "direct" (Bolo publishes through the company's own Facebook /
+   * Instagram / LinkedIn connections at its time), "postiz", or "dry" (nothing connected — marked
+   * live by hand). `results` per platform; failed publishes retry a few times.
+   */
+  publish?: {
+    via: "direct" | "postiz" | "dry";
+    results?: Partial<Record<Platform, { ok: boolean; id?: string; url?: string; error?: string; at: string }>>;
+    attempts?: number;
+    nextTry?: string;
+    /** Which process is publishing it right now — so two servers never post the same thing twice. */
+    claim?: { by: string; at: string };
+  };
   permalink?: string;
   createdAt: string;
   updatedAt: string;
 };
 
-export type Approver = { name: string; handle: string; backup: boolean };
+/**
+ * Someone who can approve. `handle` is their Telegram username (may be empty for someone who only
+ * approves in the studio); `userId` links a studio account. `owner` marks the fallback: a company
+ * with no approvers set is approved by its owner.
+ */
+export type Approver = { name: string; handle: string; backup: boolean; userId?: string; owner?: boolean };
 
 export type Channel = { platform: Platform; handle: string; postizIntegrationId?: string };
 
@@ -116,6 +156,24 @@ export type BrandChecks = {
 
 export type BrandKitFile = { name: string; content: string };
 
+/** client.json — the parts of a Brand Kit that aren't markdown. */
+export type ClientMeta = {
+  name: string;
+  short: string;
+  sector: string;
+  mark: { bg: string; fg: string; font?: "brand" };
+  rooms: { work: string; approvals: string };
+  channels: Channel[];
+};
+
+export type MemberRole = "owner" | "admin" | "member";
+
+/** A user's place in a company. Owners and admins manage the team, Brand Kit and connections. */
+export type Member = { userId: string; role: MemberRole; canApprove: boolean; addedAt: string };
+
+/** Public view of a member, safe to send to the browser. */
+export type MemberInfo = Member & { name: string; email: string; username?: string; telegram?: string };
+
 export type Client = {
   id: string;
   name: string;
@@ -131,6 +189,83 @@ export type Client = {
   reraNumbers: string[];
   checks: BrandChecks;
   files: BrandKitFile[];
+  /** Studio accounts in this company (empty for a kit that isn't in the store yet). */
+  members: MemberInfo[];
+  /** Telegram usernames that approve without a Bolo account. */
+  telegramApprovers: string[];
+  /** Anyone in the company's connected Telegram group may approve. */
+  groupApproves: boolean;
+};
+
+/** Encrypted at rest (secrets.ts) — never sent to the browser. */
+export type Secret = string;
+
+/**
+ * What a company has connected. Platform services (Switch, Postiz, Wispr Flow) are not here —
+ * they belong to the Bolo Studio admins and live in .env.
+ */
+export type Connections = {
+  telegram?: { chatId: string; title: string; connectedAt: string; by?: string };
+  /** One-time code the client sends in their group to link it (expires). */
+  telegramCode?: { code: string; expiresAt: string };
+  meta?: {
+    userName?: string;
+    pageId: string;
+    pageName: string;
+    pageToken: Secret;
+    igUserId?: string;
+    igUsername?: string;
+    connectedAt: string;
+  };
+  /** Pages returned by Facebook login, waiting for the client to pick one (expires). */
+  metaPending?: { pages: { id: string; name: string; token: Secret; igUserId?: string; igUsername?: string }[]; userName?: string; expiresAt: string };
+  linkedin?: { name: string; authorUrn: string; token: Secret; expiresAt: string; connectedAt: string };
+  drive?: { refreshToken: Secret; email?: string; folders?: { client: string; designs?: string; published: string; references?: string }; connectedAt: string };
+  sarvam?: { key: Secret; connectedAt: string };
+  ai?: { provider: "anthropic" | "openai"; key: Secret; model?: string; connectedAt: string };
+};
+
+/** A company (client workspace): its Brand Kit, team and connections. */
+export type Company = {
+  id: string;
+  kit: { meta: ClientMeta; files: BrandKitFile[] };
+  members: Member[];
+  connections: Connections;
+  /**
+   * Who approves on Telegram without a Bolo account: Telegram usernames (the client's social media
+   * manager, their own client…), or everyone in the connected group.
+   */
+  approvals?: { telegram: string[]; anyoneInGroup: boolean };
+  createdAt: string;
+  createdBy?: string;
+};
+
+export type Invite = {
+  id: string;
+  companyId: string;
+  userId: string;
+  invitedBy: string;
+  role: MemberRole;
+  canApprove: boolean;
+  status: "pending" | "accepted" | "declined" | "cancelled";
+  createdAt: string;
+  respondedAt?: string;
+};
+
+export type NotificationKind = "invite" | "approval" | "approved" | "changes" | "live" | "job-done" | "job-failed" | "connection" | "member" | "info";
+
+export type Notification = {
+  id: string;
+  userId: string;
+  kind: NotificationKind;
+  title: string;
+  body?: string;
+  /** Where clicking it goes, e.g. /studio/pushpam-demo/post/abc123 */
+  href?: string;
+  companyId?: string;
+  inviteId?: string;
+  read: boolean;
+  createdAt: string;
 };
 
 export type ClientSettings = {
@@ -141,9 +276,14 @@ export type ClientSettings = {
 };
 
 export type StudioData = {
-  version: 1;
+  version: 3;
   posts: Post[];
   settings: Record<string, ClientSettings>;
+  companies: Company[];
+  invites: Invite[];
+  notifications: Notification[];
+  /** Studio accounts (password hashes) — never sent to the browser. */
+  users: StoredUser[];
 };
 
 export type Agent = {

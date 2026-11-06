@@ -43,8 +43,8 @@ test("an answer without captions is refused (stories may skip them)", () => {
 });
 
 test("a Claude idea starts as a draft that shows it's being written", async () => {
-  resetStore();
+  await resetStore();
   const post = await wf.createIdea({ clientId: "pushpam-demo", text: "Diwali site visit offer", author: "Kamran", format: "Post", mode: "claude" });
   assert.equal(post.status, "draft");
-  assert.match(post.job?.step ?? "", /Claude/);
+  assert.match(post.job?.step ?? "", /Writing/);
 });

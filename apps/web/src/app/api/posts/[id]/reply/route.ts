@@ -1,15 +1,17 @@
-import { clientReply, WorkflowError } from "@bolo/core";
+import { clientReply } from "@bolo/core";
+import { authorizePost } from "@/lib/access";
 import { body, handle } from "@/lib/api-route";
 
 /**
- * An approver acting from the dashboard instead of Telegram. The handle comes from the
- * signed-in account — never from the request — and must be listed in protocol.md.
+ * Approve, reject or ask for changes from the studio. Who is acting comes from the signed-in
+ * account — never from the request — and must be one of the company's approvers (or, when the
+ * company has none, its owner).
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return handle(async (me) => {
-    if (!me.telegram) throw new WorkflowError(403, "Add your Telegram username to your account to approve from the dashboard.");
+    authorizePost(me, id);
     const b = await body<{ text: string }>(req);
-    return clientReply(id, { handle: me.telegram, text: b.text ?? "", via: "dashboard" });
+    return clientReply(id, { userId: me.id, handle: me.telegram, name: me.name, text: b.text ?? "", via: "dashboard" });
   });
 }

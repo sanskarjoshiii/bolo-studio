@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { basename, join, resolve, sep } from "node:path";
 import { repoRoot } from "./brand-kit";
 import { readStore, updateStore } from "./store";
-import type { Media } from "./types";
+import type { Media, Post } from "./types";
 import { WorkflowError } from "./errors";
 
 // Rendered/uploaded creatives live in data/media/<postId>/. Only these types are accepted —
@@ -43,7 +43,7 @@ export function readMedia(postId: string, file: string) {
 /** Store a file and attach it to the post. Content changes withdraw a pending approval. */
 export async function addMedia(
   postId: string,
-  input: { name: string; type: string; bytes: Uint8Array; source?: Media["source"]; textHash?: string },
+  input: { name: string; type: string; bytes: Uint8Array; source?: Media["source"]; textHash?: string; w?: number; h?: number },
 ) {
   const kind = MEDIA_TYPES[input.type];
   if (!kind) throw new WorkflowError(400, "Use PNG, JPG, WebP, MP4 or MOV.");
@@ -56,10 +56,11 @@ export async function addMedia(
   mkdirSync(resolve(mediaRoot(), postId), { recursive: true });
   writeFileSync(mediaPath(postId, file), input.bytes);
 
-  return updateStore((data) => {
+  const post = await updateStore((data) => {
     const post = data.posts.find((p) => p.id === postId)!;
     const entry: Media = { file, name: input.name, type: input.type, kind, size: input.bytes.byteLength, source: input.source ?? "upload" };
     if (input.textHash) entry.textHash = input.textHash;
+    if (input.w && input.h) Object.assign(entry, { w: input.w, h: input.h });
     post.media = [...(post.media ?? []), entry];
     if (post.status === "awaiting") {
       post.thread.push({ from: "Brand Guard", text: "Media changed — approval request withdrawn.", at: new Date().toISOString() });
@@ -69,6 +70,22 @@ export async function addMedia(
     post.updatedAt = new Date().toISOString();
     return post;
   });
+  // Every design Bolo generates is also kept in the company's Google Drive (Designs/<date> <title>)
+  if (input.source === "template") await keepInDrive(post, file, input.bytes);
+  return readStore().posts.find((p) => p.id === postId) ?? post;
+}
+
+async function keepInDrive(post: Post, file: string, bytes: Uint8Array) {
+  const entry = post.media?.find((m) => m.file === file);
+  if (!entry) return;
+  try {
+    const { saveDesign } = await import("./drive");
+    await Promise.race([saveDesign(post, entry, bytes), new Promise((_, no) => setTimeout(() => no(new Error("Google Drive took too long")), 90_000))]);
+  } catch (e) {
+    await updateStore((data) => {
+      data.posts.find((p) => p.id === post.id)?.thread.push({ from: "Drive", text: `⚠ Design not saved to Google Drive: ${(e as Error).message}`, at: new Date().toISOString() });
+    }).catch(() => undefined);
+  }
 }
 
 export async function removeMedia(postId: string, file: string) {

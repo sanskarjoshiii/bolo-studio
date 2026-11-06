@@ -1,11 +1,12 @@
 import { createServer } from "node:http";
+import { createServer as createNetServer } from "node:net";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
-import { addMedia, brandTokens, creativeTextHash, loadClient, mediaPath, prepareForRender, readStore, removeMedia, repoRoot, WorkflowError, type Client, type Post, type ReelScript } from "@bolo/core";
+import { addMedia, brandTokens, creativeTextHash, loadClient, mediaPath, prepareForRender, readStore, removeMedia, repoRoot, sizeFor, WorkflowError, type Client, type Post, type ReelScript } from "@bolo/core";
 import { speak, ttsConfigured, wavSeconds } from "./tts";
 import { FPS, type ReelProps } from "./composition/types";
 
@@ -62,6 +63,24 @@ export function defaultScript(post: Post, client: Client): ReelScript {
 
 const MIME: Record<string, string> = { ".wav": "audio/wav", ".mp3": "audio/mpeg", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
 
+/**
+ * A port nobody is listening on. Remotion would otherwise start its bundle server at 3000 and, on
+ * Windows, can bind 127.0.0.1:3000 even while the studio's Next server holds 0.0.0.0:3000 — Chrome
+ * then opens the studio instead of the reel ("window.getStaticCompositions is not defined").
+ * Binding the IPv6/IPv4 wildcard here fails for any port already taken on either.
+ */
+export async function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = createNetServer();
+    srv.unref();
+    srv.on("error", reject);
+    srv.listen(0, () => {
+      const { port } = srv.address() as AddressInfo;
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
 /** Serve render assets over localhost so the headless browser can load them. */
 async function assetServer(files: Map<string, string>) {
   const server = createServer((req, res) => {
@@ -89,7 +108,8 @@ export async function renderReel(postId: string, opts: { voice?: boolean; log?: 
   if (!client) throw new WorkflowError(404, "Client not found.");
 
   const script = post.reel?.scenes.length ? post.reel : defaultScript(post, client);
-  const useVoice = (opts.voice ?? true) && ttsConfigured() && script.scenes.some((s) => s.voice);
+  const size = sizeFor(post);
+  const useVoice = (opts.voice ?? true) && ttsConfigured(post.clientId) && script.scenes.some((s) => s.voice);
   const work = join(dataDir(), ".cache", "reel-work", `${postId}-${Date.now().toString(36)}`);
   mkdirSync(work, { recursive: true });
 
@@ -105,7 +125,7 @@ export async function renderReel(postId: string, opts: { voice?: boolean; log?: 
       let audio: string | undefined;
       if (useVoice && s.voice) {
         log(`Voice ${i + 1}/${script.scenes.length}…`);
-        const wav = await speak(s.voice, { lang: script.voiceLang ?? "en-IN", speaker: script.speaker });
+        const wav = await speak(s.voice, { lang: script.voiceLang ?? "en-IN", speaker: script.speaker, companyId: post.clientId });
         const name = `voice-${i}.wav`;
         writeFileSync(join(work, name), wav);
         files.set(name, join(work, name));
@@ -124,10 +144,11 @@ export async function renderReel(postId: string, opts: { voice?: boolean; log?: 
       scenes,
       end: { title: client.name, cta: script.cta ?? "", footnote, frames: Math.round(3.5 * FPS) },
       music: existsSync(music) ? `${server.base}/music.mp3` : undefined,
+      size: { w: size.w, h: size.h },
     };
 
     const url = await serveUrl(log);
-    const composition = await selectComposition({ serveUrl: url, id: "Reel", inputProps: props });
+    const composition = await selectComposition({ serveUrl: url, id: "Reel", inputProps: props, port: await freePort() });
     const out = join(work, "reel.mp4");
     log(`Rendering ${Math.round(composition.durationInFrames / FPS)}s reel…`);
     let last = -1;
@@ -137,6 +158,7 @@ export async function renderReel(postId: string, opts: { voice?: boolean; log?: 
       codec: "h264",
       outputLocation: out,
       inputProps: props,
+      port: await freePort(),
       onProgress: ({ progress }) => {
         const pct = Math.floor(progress * 10) * 10;
         if (pct !== last) log(`  ${(last = pct)}%`);
@@ -150,9 +172,11 @@ export async function renderReel(postId: string, opts: { voice?: boolean; log?: 
       bytes: new Uint8Array(readFileSync(out)),
       source: "template",
       textHash: creativeTextHash(post),
+      w: size.w,
+      h: size.h,
     });
     for (const m of previous) result = await removeMedia(post.id, m.file);
-    log(useVoice ? "Done — reel with voiceover attached." : ttsConfigured() ? "Done — silent reel attached." : "Done — silent reel attached (set SARVAM_API_KEY for voiceover).");
+    log(useVoice ? "Done — reel with voiceover attached." : ttsConfigured(post.clientId) ? "Done — silent reel attached." : "Done — silent reel attached (connect Sarvam AI for voiceover).");
     return result;
   } finally {
     await server.close();

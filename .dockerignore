@@ -1,0 +1,13 @@
+**/node_modules
+**/.next
+**/.next-*
+data
+.env
+.env.*
+!.env.example
+.git
+UI
+agents/workspace
+infra/postiz/upstream
+*.log
+**/*.tsbuildinfo

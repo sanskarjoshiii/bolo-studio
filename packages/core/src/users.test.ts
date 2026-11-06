@@ -9,9 +9,9 @@ delete process.env.AUTH_SECRET;
 
 const u = await import("./users");
 
-test("first user, login, wrong password, duplicate email", () => {
+test("first user, login, wrong password, duplicate email", async () => {
   assert.equal(u.hasUsers(), false);
-  const admin = u.createUser({ email: "Kamran@7P.in ", name: "Kamran", password: "correct horse", role: "admin", telegram: "pathankamran_03" });
+  const admin = await u.createUser({ email: "Kamran@7P.in ", name: "Kamran", password: "correct horse", role: "admin", telegram: "pathankamran_03" });
   assert.equal(admin.email, "kamran@7p.in");
   assert.equal(admin.telegram, "@pathankamran_03");
   assert.equal(JSON.stringify(admin).includes("passwordHash"), false);
@@ -19,8 +19,8 @@ test("first user, login, wrong password, duplicate email", () => {
   assert.equal(u.authenticate("kamran@7p.in", "correct horse")?.id, admin.id);
   assert.equal(u.authenticate("kamran@7p.in", "wrong"), null);
   assert.equal(u.authenticate("nobody@7p.in", "correct horse"), null);
-  assert.throws(() => u.createUser({ email: "kamran@7p.in", name: "X", password: "12345678", role: "member" }), /already has an account/);
-  assert.throws(() => u.createUser({ email: "a@b.co", name: "X", password: "short", role: "member" }), /at least 8/);
+  await assert.rejects(() => u.createUser({ email: "kamran@7p.in", name: "X", password: "12345678", role: "member" }), /already has an account/);
+  await assert.rejects(() => u.createUser({ email: "a@b.co", name: "X", password: "short", role: "member" }), /at least 8/);
 });
 
 test("sessions are signed: tampering or expiry is rejected", () => {
@@ -35,19 +35,19 @@ test("sessions are signed: tampering or expiry is rejected", () => {
   assert.equal(u.verifyToken(u.signToken({ kind: "render" }, -1)), null);
 });
 
-test("logout and password change end existing sessions", () => {
+test("logout and password change end existing sessions", async () => {
   const user = u.listUsers()[0];
   const a = u.createSession(user);
-  u.endSessions(user.id);
+  await u.endSessions(user.id);
   assert.equal(u.userFromSession(a), null);
   const b = u.createSession(user);
   assert.equal(u.userFromSession(b)?.id, user.id);
-  u.updateUser(user.id, { password: "a brand new password" });
+  await u.updateUser(user.id, { password: "a brand new password" });
   assert.equal(u.userFromSession(b), null);
 });
 
-test("the last admin can't be removed or demoted", () => {
+test("the last admin can't be removed or demoted", async () => {
   const admin = u.listUsers().find((x) => x.role === "admin")!;
-  assert.throws(() => u.deleteUser(admin.id), /at least one admin/);
-  assert.throws(() => u.updateUser(admin.id, { role: "member" }), /at least one admin/);
+  await assert.rejects(() => u.deleteUser(admin.id), /at least one admin/);
+  await assert.rejects(() => u.updateUser(admin.id, { role: "member" }), /at least one admin/);
 });

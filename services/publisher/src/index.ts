@@ -1,12 +1,13 @@
 import { serve } from "@hono/node-server";
 import { Hono, type MiddlewareHandler } from "hono";
-import { knownRooms, listIntegrations, markLive, postizConfig, repoRoot, switchConfig, WorkflowError } from "@bolo/core";
+import { knownRooms, listIntegrations, loadStore, markLive, postizConfig, repoRoot, switchConfig, WorkflowError } from "@bolo/core";
 import { handleRoomMessage, type RoomMessage } from "./room";
 import { SwitchAgent } from "./switch-agent";
 import { bridgeUrl } from "./switch-config";
 import { writeEnv } from "./env-file";
 
 repoRoot(); // locate the repo and load .env before reading config
+await loadStore();
 
 const app = new Hono();
 const secret = process.env.PUBLISHER_WEBHOOK_SECRET ?? "";

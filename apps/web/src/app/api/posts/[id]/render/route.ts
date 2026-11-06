@@ -1,10 +1,13 @@
+import { authorizePost } from "@/lib/access";
 import { handle } from "@/lib/api-route";
-import { renderImages } from "@/lib/media-jobs";
+import { startMediaJob } from "@/lib/pipeline";
 
-export const maxDuration = 120;
-
-/** Render the brand template to PNGs (post, story, or one per carousel slide). */
+/** Render the brand design to PNGs (post, story, or one per carousel slide) — runs in the background. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return handle(() => renderImages(id, new URL(req.url).origin));
+  return handle(async (me) => {
+    authorizePost(me, id);
+    startMediaJob(id, "images", { origin: new URL(req.url).origin, byId: me.id });
+    return { started: true };
+  });
 }

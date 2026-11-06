@@ -15,9 +15,12 @@ export function useMe() {
   return me;
 }
 
-/** The signed-in user's approver entry for this client, if their Telegram handle is in protocol.md. */
+/**
+ * The signed-in user's approver entry for this company: a team member with "can approve", an
+ * approver in protocol.md with their Telegram handle, or — when nobody is set — the owner.
+ */
 export function useApproverFor(client: Client) {
   const me = useMe();
   const h = me.telegram?.replace(/^@/, "").toLowerCase();
-  return h ? (client.approvers.find((a) => a.handle.replace(/^@/, "").toLowerCase() === h) ?? null) : null;
+  return client.approvers.find((a) => a.userId === me.id || (h && a.handle && a.handle.replace(/^@/, "").toLowerCase() === h)) ?? null;
 }

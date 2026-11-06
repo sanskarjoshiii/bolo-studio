@@ -1,9 +1,12 @@
 import { disconnectDrive } from "@bolo/core";
-import { handle } from "@/lib/api-route";
+import { authorizeManage } from "@/lib/access";
+import { body, handle } from "@/lib/api-route";
 
-export async function POST() {
-  return handle(async () => {
-    disconnectDrive();
+export async function POST(req: Request) {
+  return handle(async (me) => {
+    const { company } = await body<{ company: string }>(req);
+    authorizeManage(me, company);
+    await disconnectDrive(company);
     return { ok: true };
-  }, { admin: true });
+  });
 }

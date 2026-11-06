@@ -7,11 +7,13 @@ import {
   createIdea,
   getClientStudio,
   listClients,
+  loadStore,
   loadClient,
   postRef,
   previewBrandGuard,
   readStore,
   repoRoot,
+  kitDirFor,
   setting,
   signToken,
   submitForApproval,
@@ -140,6 +142,7 @@ async function web<T>(path: string, method: "POST" = "POST"): Promise<T> {
 
 async function main() {
   repoRoot();
+  await loadStore();
   const [cmd, ...rest] = process.argv.slice(2);
   const { pos, flags } = parse(rest);
 
@@ -156,7 +159,7 @@ async function main() {
       const c = resolveClient(pos[0]);
       return out({
         client: c.name,
-        folder: join(repoRoot(), "brand-kits", c.id),
+        folder: kitDirFor(c.id),
         read: c.files.map((f) => f.name),
         approvers: c.approvers.map((a) => `${a.name} ${a.handle}`),
         platforms: c.channels.map((x) => x.platform),
@@ -179,7 +182,7 @@ async function main() {
       return out({
         ...summary(p),
         client: c.id,
-        brandKit: join(repoRoot(), "brand-kits", c.id),
+        brandKit: kitDirFor(c.id),
         brief: p.brief ?? null,
         tag: p.tag,
         creativeText: p.creativeText,

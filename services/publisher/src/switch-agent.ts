@@ -3,6 +3,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import WebSocket from "ws";
 import { agentName, getStudio, knownRooms, postToRoom, rememberRooms, repoRoot, sameRoom, WorkflowError } from "@bolo/core";
+
+// The Publisher works for the agency across every company (Switch is a platform service).
+const AGENCY = { id: "agent:bolo-publisher", role: "admin" as const };
 import { handleRoomMessage } from "./room";
 import { agentCredentials, bridgeUrl } from "./switch-config";
 
@@ -238,7 +241,7 @@ export class SwitchAgent {
    * agents into the work rooms, so nobody has to type !invite-agent by hand.
    */
   private async joinBrandKitRooms() {
-    const clients = getStudio().map((s) => s.client);
+    const clients = getStudio(AGENCY).map((s) => s.client);
     const mine = await this.refreshRooms();
     let all: { id: string; name: string }[] | null = null;
 
@@ -308,7 +311,7 @@ export class SwitchAgent {
   /** Claim every Brand Kit room the Publisher belongs to on this connection. */
   private async subscribeRooms() {
     const rooms = knownRooms();
-    const wanted = getStudio().flatMap((s) => [s.client.rooms.approvals, s.client.rooms.work]);
+    const wanted = getStudio(AGENCY).flatMap((s) => [s.client.rooms.approvals, s.client.rooms.work]);
     for (const name of wanted) {
       const room = rooms.find((r) => sameRoom(r.name, name));
       if (!room || this.claimed.has(room.id)) continue;
@@ -432,19 +435,21 @@ export class SwitchAgent {
   private async onMessage(f: Frame) {
     const p = (f.payload ?? f) as Record<string, unknown>;
     const text = (str(p.body) ?? "").trim().replace(/^\//, "");
-    if (!/^(approve|change)\b/i.test(text)) return;
+    if (!/^(approve|change|reject)\b/i.test(text)) return;
 
     const roomId = this.roomIdOf(f);
     const room = roomId ? await this.roomName(roomId) : null;
     if (!room) return;
-    const entry = getStudio().find((s) => sameRoom(s.client.rooms.approvals, room));
+    const entry = getStudio(AGENCY).find((s) => sameRoom(s.client.rooms.approvals, room));
     if (!entry) return; // not an approvals room — ignore
 
     const handle = telegramHandle(str(p.sender) ?? "", str(f.bridge_id));
 
     try {
-      if (!handle) throw new WorkflowError(403, "Only approvers listed in protocol.md can approve — I couldn't verify this Telegram account.");
-      await handleRoomMessage({ room, author: handle, text });
+      if (!handle && !entry.client.groupApproves) {
+        throw new WorkflowError(403, "I couldn't see your Telegram username — set one in Telegram → Settings → Username, then ask your Bolo team to add it as an approver.");
+      }
+      await handleRoomMessage({ room, author: handle ?? (str(p.sender) ?? "Telegram group"), text });
       // Success messages ("Scheduled ✅", "Noted …") are posted by the workflow itself.
     } catch (e) {
       const msg = e instanceof WorkflowError ? e.message : "Something went wrong scheduling that — the team has been notified.";

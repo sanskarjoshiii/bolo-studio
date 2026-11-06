@@ -11,9 +11,9 @@ import { STATUS_META } from "@/lib/status";
 import { cn } from "@/lib/cn";
 
 const GROUPS: { status: PostStatus; title: string; empty: string }[] = [
-  { status: "awaiting", title: "Waiting on the client", empty: "Nothing is waiting for the client." },
-  { status: "brand-check", title: "Blocked by Brand Guard", empty: "No drafts are blocked." },
-  { status: "draft", title: "In production", empty: "No drafts in production." },
+  { status: "awaiting", title: "Waiting for approval", empty: "Nothing is waiting for approval." },
+  { status: "brand-check", title: "Needs a fix (Brand Guard)", empty: "Nothing is blocked." },
+  { status: "draft", title: "In production", empty: "Nothing in production." },
 ];
 
 export function ApprovalsView({ client, posts, selectedId }: { client: Client; posts: Post[]; selectedId: string | null }) {
@@ -31,10 +31,12 @@ export function ApprovalsView({ client, posts, selectedId }: { client: Client; p
   return (
     <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-night-2/60 ring-1 ring-white/[0.06]">
       <div className="border-b border-white/[0.05] px-5 py-4">
-        <h1 className="text-[17px] font-medium tracking-tight">Approval queue</h1>
+        <h1 className="text-[17px] font-medium tracking-tight">Approvals</h1>
         <p className="mt-0.5 text-[12px] text-fog">
-          Finals go to <span className="text-white/80">{client.rooms.approvals}</span> · approvers:{" "}
-          {client.approvers.map((a) => `${a.name} (${a.handle})`).join(", ")}
+          Everything generated but not approved yet. Approved posts move to Drafts until they go out ·{" "}
+          {client.approvers.some((a) => a.owner)
+            ? "no approvers set — the owner approves"
+            : `approvers: ${client.approvers.map((a) => a.name).join(", ")}`}
         </p>
       </div>
 
@@ -110,7 +112,7 @@ function Row({ post, client, selected, onClick }: { post: Post; client: Client; 
               )}
             </>
           )}
-          {post.status === "draft" && <span className="truncate text-white/60">{post.note ?? "Agents are producing this post"}</span>}
+          {post.status === "draft" && <span className="truncate text-white/60">{post.job ? `${post.job.step} ${post.job.progress ?? 0}%` : (post.note ?? "Being produced")}</span>}
         </p>
       </div>
     </button>

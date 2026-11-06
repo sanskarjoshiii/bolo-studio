@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   return handle(
     async () => {
       const b = await body<{ email: string; name: string; password: string; role?: Role; telegram?: string }>(req);
-      return createUser({ ...b, role: b.role === "admin" ? "admin" : "member" });
+      return await createUser({ ...b, role: b.role === "admin" ? "admin" : "member" });
     },
     { admin: true },
   );

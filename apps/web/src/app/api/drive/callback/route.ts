@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
-import { connectDrive, listClients, verifyToken } from "@bolo/core";
+import { refreshStore, connectDrive, verifyToken } from "@bolo/core";
 
 /** Google redirects here after consent. */
 export async function GET(req: Request) {
+  await refreshStore();
   const url = new URL(req.url);
-  const back = (status: string) => NextResponse.redirect(new URL(`/studio/${listClients()[0]?.id ?? ""}/connections?drive=${status}`, url.origin));
+  const state = verifyToken<{ kind: string; cid: string; uid: string }>(url.searchParams.get("state") ?? undefined);
+  const back = (status: string) => NextResponse.redirect(new URL(state?.cid ? `/studio/${state.cid}/connections?drive=${status}` : "/dashboard", url.origin));
+  if (state?.kind !== "drive" || !state.cid) return back("invalid");
   if (url.searchParams.get("error")) return back("cancelled");
-  if (verifyToken<{ kind: string }>(url.searchParams.get("state") ?? undefined)?.kind !== "drive") return back("invalid");
   try {
-    await connectDrive(url.searchParams.get("code") ?? "");
+    await connectDrive(state.cid, url.searchParams.get("code") ?? "");
     return back("connected");
   } catch (e) {
     console.error("Drive connect failed:", (e as Error).message);

@@ -362,9 +362,7 @@ function MetaCard({ client, s, manager }: { client: Client; s: ConnectionStatus[
             ]}
           />
           {manager && (
-            <a href={`/api/connect/meta/start?company=${client.id}`} className={cn(primary, "mt-auto")}>
-              <FacebookIcon className="size-4" /> Continue with Facebook
-            </a>
+            <MetaReviewButton href={`/api/connect/meta/start?company=${client.id}`} className={cn(primary, "mt-auto")} />
           )}
         </>
       )}
@@ -580,5 +578,37 @@ function AiCard({ client, s, manager }: { client: Client; s: ConnectionStatus["a
         </>
       )}
     </Card>
+  );
+}
+
+/** Meta's App Review is pending: say so before sending anyone to Facebook. */
+function MetaReviewButton({ href, className }: { href: string; className: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className={className}>
+        <FacebookIcon className="size-4" /> Continue with Facebook
+      </button>
+      {open && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[440px] rounded-2xl bg-night p-6 text-white ring-1 ring-white/10">
+            <p className="text-[16px] font-medium">Facebook &amp; Instagram are in Meta review</p>
+            <p className="mt-2 text-[13px] leading-relaxed text-white/75">
+              Our Meta app is waiting for Meta&apos;s App Review. Until it&apos;s approved, only accounts added as testers of the app can connect a
+              Facebook Page and Instagram. Everything else works: create designs, approve them and see them in Drafts and the calendar.
+            </p>
+            <p className="mt-2 text-[12.5px] text-fog">Judges: try the sample company from <b className="font-medium text-white">Try the demo</b> on the home page.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 text-[13px] text-fog hover:text-white">
+                Close
+              </button>
+              <a href={href} className="rounded-lg bg-white/[0.08] px-3 py-2 text-[13px] hover:bg-white/[0.12]">
+                I&apos;m a tester — continue
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

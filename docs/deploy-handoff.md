@@ -7,6 +7,16 @@ page fills in everything around it.
 
 ---
 
+## 0. Sanskar's part (~10 min)
+
+Sanskar does two things. **Everything else is yours** — you don't need access to the Meta or
+LinkedIn apps.
+
+1. **Sends you the keys privately** (section 2), one-to-one — not in a group chat or in Git.
+2. **Adds the live domain to the Meta and LinkedIn apps** (section 5) as soon as you send him the
+   domain (e.g. `studio.example.com`). Until he does, Facebook/LinkedIn login on the live site shows
+   "URL blocked".
+
 ## 1. Get the code
 
 ```bash
@@ -17,10 +27,9 @@ npm test          # should say 67 passing (60 core + 7 Publisher)
 
 You don't need to run anything locally to deploy — the server builds everything itself.
 
-## 2. What you need from Sanskar (ask him privately — never in Git, a group chat or a screenshot)
+## 2. Keys for the server (never share them in Git, a group chat or a screenshot)
 
-These are values from **his** `.env`. Copy them one by one into the server's `.env` (step 4 of
-deploy-aws.md).
+Sanskar sends you these privately. Copy them into the server's `.env` (step 4 of deploy-aws.md).
 
 | Key | What it is | Needed? |
 |---|---|---|
@@ -29,11 +38,9 @@ deploy-aws.md).
 | `TELEGRAM_BOT_TOKEN` | @bolo_studio_bot | Yes |
 | `SARVAM_API_KEY` | Marathi/Hindi voiceovers for reels | Yes |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google Drive (optional) | Only if Drive is wanted |
+| `BOLO_DEMO_AI_KEY` | Anthropic API key for the "Try the demo" company — create one at console.anthropic.com, set a monthly spend limit | For "Try the demo" |
 
-**Also ask for access** (or ask him to do these clicks — section 5):
-- **Admin/Developer role** on the Meta app *voxton* (developers.facebook.com → App roles).
-- Access to the **LinkedIn app** (linkedin.com/developers → the app → Team members).
-- Google Cloud project, if Drive is used.
+Google Drive is optional — skip it unless the team asks for it.
 
 **Do NOT copy these from his `.env`:**
 
@@ -67,10 +74,11 @@ bash infra/aws/deploy.sh        # again, to apply them
 Open `https://<domain>` → the **first account you create becomes the admin**. Use the team's shared
 email for it, not a personal test account.
 
-## 5. Register the new address with Meta, LinkedIn (and Google)
+## 5. Register the new address with Meta and LinkedIn (Sanskar does this)
 
-The logins only send people back to addresses on the list. **Add** the new ones — keep the ngrok ones
-too, so local demos still work.
+**Sanskar:** do this as soon as you get the domain. The logins only send people back to addresses on
+the list, so **add** the new ones — keep the ngrok ones too, so local demos still work.
+Replace `<domain>` with the domain you were sent (no `https://` in App domains, no `/` at the end).
 
 **Meta** (developers.facebook.com → voxton):
 - Facebook Login for Business → Settings → **Valid OAuth Redirect URIs**:
@@ -109,6 +117,16 @@ Don't leave `TELEGRAM_UPDATES` unset on the server while Switch Console is runni
 both would fight over the bot and approvals get lost. (Running Switch itself on AWS is possible later,
 but it's not part of this handoff.)
 
+## 6b. "Try the demo" and Meta review (built in)
+
+- The home page has **Try the Demo** (also under the login form). It signs visitors into a shared
+  demo account with a sample company, **Chai Katta Pune**: full dashboard, Create, Approvals, Drafts,
+  calendar. It can't connect real social accounts.
+- It writes and designs with `BOLO_DEMO_AI_KEY`. Without that key, generating there fails with
+  "No AI connected".
+- **Continue with Facebook** first shows a notice that the Meta app is in App Review. Testers of the
+  voxton app can continue; others are pointed to the demo.
+
 ## 7. Check it works (10 min)
 
 - [ ] `https://<domain>` opens with a padlock; sign up works.
@@ -119,6 +137,7 @@ but it's not part of this handoff.)
       Claude Code login, so each company uses its own key.
 - [ ] Create → Generate a post → it appears with a design and captions.
 - [ ] Approvals → Approve → Drafts → **Post now** → live on Facebook and Instagram.
+- [ ] Home page → **Try the Demo** opens the sample company; Create → Generate works.
 - [ ] Optional: make a short reel (checks Sarvam + rendering memory).
 
 If a post fails, the reason is in the post's **Activity** panel; server logs:

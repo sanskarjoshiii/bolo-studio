@@ -39,6 +39,9 @@ export function Navbar() {
           <Link href="/dashboard" className="text-[14px] text-ink/75 hover:text-ink">
             Login
           </Link>
+          <a href="/api/auth/demo" className="text-[14px] font-medium text-ink hover:underline">
+            Try now
+          </a>
           <Link href="/dashboard" className="rounded-lg bg-ink px-4 py-2 text-[14px] font-medium text-white hover:bg-ink/85">
             Open Studio
           </Link>
@@ -56,6 +59,9 @@ export function Navbar() {
               {l.label}
             </a>
           ))}
+          <a href="/api/auth/demo" onClick={() => setOpen(false)} className="block py-2 text-[15px] font-medium">
+            Try now
+          </a>
           <Link href="/dashboard" className="mt-2 block rounded-lg bg-ink px-4 py-2.5 text-center text-[14px] font-medium text-white">
             Open Studio
           </Link>

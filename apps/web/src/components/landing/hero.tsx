@@ -52,6 +52,9 @@ export function Hero() {
           className="mt-9 flex flex-wrap items-center justify-center gap-3"
         >
           <ButtonLink href="/dashboard">Open the Studio</ButtonLink>
+          <ButtonLink href="/api/auth/demo" variant="ghost">
+            Try the Demo
+          </ButtonLink>
           <ButtonLink href="#how" variant="ghost">
             See How It Works
           </ButtonLink>

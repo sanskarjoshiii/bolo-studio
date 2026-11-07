@@ -18,8 +18,14 @@ export type AiRequest = { system: string; prompt: string; schema: Record<string,
 
 /** Which AI runs for this company — null when nothing is connected. */
 export function aiFor(companyId: string): { provider: AiProvider | "claude-code"; model?: string; key?: string } | null {
-  const ai = readStore().companies.find((c) => c.id === companyId)?.connections.ai;
+  const data = readStore();
+  const company = data.companies.find((c) => c.id === companyId);
+  const ai = company?.connections.ai;
   if (ai) return { provider: ai.provider, model: ai.model, key: decrypt(ai.key) };
+  // The shared "Try the demo" company runs on the platform's own key (BOLO_DEMO_AI_KEY, Anthropic).
+  const demoKey = setting("BOLO_DEMO_AI_KEY");
+  const demo = data.users?.find((u) => u.email?.toLowerCase() === "demo@bolostudio.app");
+  if (demoKey && demo && company?.members.some((m) => m.userId === demo.id)) return { provider: "anthropic", key: demoKey };
   return null;
 }
 

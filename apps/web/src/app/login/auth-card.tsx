@@ -35,6 +35,10 @@ export function AuthCard({ mode, next }: { mode: "login" | "setup" | "signup"; n
             <Link href={`/signup${q}`} className="text-lime hover:underline">
               Create an account
             </Link>
+            {" · "}
+            <a href="/api/auth/demo" className="text-lime hover:underline">
+              Try the demo without an account
+            </a>
           </p>
         )}
         {mode === "signup" && (

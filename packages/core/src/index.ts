@@ -118,3 +118,4 @@ export {
   deletePost,
 } from "./workflow";
 export type { PostPatch, NewContent, Actor } from "./workflow";
+export { DEMO_EMAIL, isDemoUser, demoAccount } from "./demo";

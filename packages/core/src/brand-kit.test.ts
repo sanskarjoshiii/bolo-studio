@@ -27,7 +27,8 @@ test("parses RERA numbers and the bolo-checks block", () => {
 
 test("loads every demo Brand Kit from disk", () => {
   const ids = listClients().map((c) => c.id);
-  assert.deepEqual(ids, ["pushpam-demo", "clinic-demo", "my-brand"]);
+  // Companies made in a local studio sit next to the demo kits — only the demo ones are checked.
+  for (const id of ["pushpam-demo", "clinic-demo", "my-brand"]) assert.ok(ids.includes(id), `missing ${id}`);
   const pushpam = loadClient("pushpam-demo")!;
   assert.equal(pushpam.approvers[0].handle, "@rk_pushpam");
   assert.deepEqual(pushpam.reraNumbers, ["P52100012345"]);

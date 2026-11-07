@@ -15,7 +15,8 @@ import { signToken } from "./users";
 // set once by the Bolo Studio admin.
 
 const nowIso = () => new Date().toISOString();
-const webUrl = () => (setting("BOLO_WEB_URL") || "http://localhost:3000").replace(/\/$/, "");
+/** The studio's public address (BOLO_WEB_URL) — where OAuth logins send people back to. */
+export const webUrl = () => (setting("BOLO_WEB_URL") || "http://localhost:3000").replace(/\/$/, "");
 /** Where Instagram fetches media from — must be public https (your domain on AWS, or a tunnel locally). */
 const publicUrl = () => (setting("BOLO_PUBLIC_URL") || setting("BOLO_WEB_URL")).replace(/\/$/, "");
 
@@ -234,13 +235,13 @@ async function facebook(post: Post, pageId: string, token: string): Promise<Publ
   return { ok: true, id: p.id, url: `https://www.facebook.com/${p.id}` };
 }
 
-/** Instagram containers take a while to process videos — wait until FINISHED (max ~5 min). */
+/** Instagram containers take a while to process (seconds for images, minutes for videos) — wait until FINISHED. */
 async function waitForContainer(id: string, token: string) {
   for (let i = 0; i < 60; i++) {
     const s = await graph<{ status_code?: string; status?: string }>(`/${id}`, { params: { fields: "status_code,status", access_token: token } });
     if (s.status_code === "FINISHED") return;
     if (s.status_code === "ERROR" || s.status_code === "EXPIRED") throw new WorkflowError(409, `Instagram couldn't process the media (${s.status ?? s.status_code}).`);
-    await new Promise((ok) => setTimeout(ok, 5000));
+    await new Promise((ok) => setTimeout(ok, i < 5 ? 2000 : 5000));
   }
   throw new WorkflowError(409, "Instagram is still processing the video — try Post now again in a few minutes.");
 }
@@ -254,7 +255,7 @@ async function instagram(post: Post, igUserId: string, token: string): Promise<P
     if (m.kind === "video") params.video_url = publicMediaUrl(post, m);
     else params.image_url = publicMediaUrl(post, m);
     const c = await graph<{ id: string }>(`/${igUserId}/media`, { body: new URLSearchParams(params) });
-    if (m.kind === "video") await waitForContainer(c.id, token);
+    await waitForContainer(c.id, token);
     return c.id;
   };
 
@@ -268,6 +269,7 @@ async function instagram(post: Post, igUserId: string, token: string): Promise<P
     creation = parent.id;
   } else creation = await container(media[0], { caption });
 
+  await waitForContainer(creation, token); // images too: publishing early fails with "media is not ready"
   const published = await graph<{ id: string }>(`/${igUserId}/media_publish`, { body: new URLSearchParams({ creation_id: creation, access_token: token }) });
   const link = await graph<{ permalink?: string }>(`/${published.id}`, { params: { fields: "permalink", access_token: token } }).catch(() => ({ permalink: undefined }));
   return { ok: true, id: published.id, url: link.permalink };

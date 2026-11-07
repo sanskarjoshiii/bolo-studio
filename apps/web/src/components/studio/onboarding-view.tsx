@@ -61,13 +61,18 @@ export function OnboardingView({ name, invites, hasCompanies }: { name: string; 
           <span className="flex items-center gap-2 text-[16px] font-semibold text-lime">
             <LogoMark className="size-6" /> <span className="text-white">Bolo Studio</span>
           </span>
-          {hasCompanies && (
+          {hasCompanies ? (
             <Link href="/dashboard" className="flex items-center gap-1.5 text-[13px] text-fog hover:text-white">
               <ArrowLeft className="size-3.5" /> Back to the studio
             </Link>
+          ) : (
+            <SwitchAccount label="Back to login" />
           )}
         </div>
         <h1 className="mt-10 text-[26px] font-medium tracking-tight">Welcome, {name.split(" ")[0]}.</h1>
+        <p className="mt-1 text-[12.5px] text-fog">
+          Not you, or signed up with the wrong details? <SwitchAccount label="Use a different account" inline />
+        </p>
         <p className="mt-1 text-[14px] text-fog">
           {hasCompanies ? "Add another company, or join one you were invited to." : "Set up your company — it takes a minute. You can change all of it later in Brand Kit."}
         </p>
@@ -193,5 +198,28 @@ function Colour({ label, value, onChange }: { label: string; value: string; onCh
         <span className="font-mono text-[13px] text-white/80">{value}</span>
       </span>
     </label>
+  );
+}
+
+/** Signs out and goes back to the login page — for an account made with the wrong details. */
+function SwitchAccount({ label, inline = false }: { label: string; inline?: boolean }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        await api("/api/auth/logout", "POST").catch(() => null);
+        window.location.assign("/login");
+      }}
+      className={cn(
+        "inline-flex items-center gap-1.5 disabled:opacity-50",
+        inline ? "text-lime hover:underline" : "text-[13px] text-fog hover:text-white",
+      )}
+    >
+      {!inline && (busy ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowLeft className="size-3.5" />)}
+      {label}
+    </button>
   );
 }

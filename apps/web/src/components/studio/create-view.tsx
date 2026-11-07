@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Clapperboard, GalleryHorizontalEnd, HardDrive, Image as ImageIcon, Loader2, Mic, PenLine, Smartphone, Sparkles, Upload, X } from "lucide-react";
+import { Bot, Clapperboard, GalleryHorizontalEnd, HardDrive, Image as ImageIcon, Loader2, PenLine, Smartphone, Sparkles, Upload, X } from "lucide-react";
 import type { Client, LanguageOption, Platform, Post, PostFormat, Size } from "@bolo/core";
 import { FORMAT_INFO, FORMATS, istIso, istParts, sizeFor } from "@bolo/core/shared";
 import { api } from "./hooks";
@@ -10,6 +10,7 @@ import { ErrorNote } from "./controls";
 import { PhonePreview } from "./phone-preview";
 import { LanguagePicker, SizePicker } from "./format-options";
 import { useMe } from "./me";
+import { VoiceInput } from "./voice-input";
 import { ScrollMain } from "@/components/ui/smooth-scroll";
 import { platformIcon, platformLabel } from "@/components/ui/platform-icons";
 import { cn } from "@/lib/cn";
@@ -48,6 +49,7 @@ export function CreateView({
   const [languages, setLanguages] = useState<LanguageOption | undefined>(undefined);
   const [format, setFormat] = useState<PostFormat>("Post");
   const [text, setText] = useState("");
+  const box = useRef<HTMLTextAreaElement>(null);
   const allowedPlatforms = useMemo(
     () => client.channels.map((c) => c.platform).filter((p) => (FORMAT_INFO[format].platforms as readonly string[]).includes(p)),
     [client, format],
@@ -155,6 +157,7 @@ export function CreateView({
 
           <Section n={4} title="Your idea">
             <textarea
+              ref={box}
               autoFocus
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -162,9 +165,16 @@ export function CreateView({
               placeholder={`e.g. Diwali ${format.toLowerCase()} for Luxe 28, family feel, Marathi plus English, site visit this weekend`}
               className="w-full resize-y rounded-xl bg-white/[0.05] p-4 text-[14px] leading-relaxed ring-1 ring-white/[0.08] outline-none placeholder:text-white/30 focus:ring-lime/50"
             />
-            <p className="mt-2 flex items-center gap-2 text-[12px] text-fog">
-              <Mic className="size-3.5 text-lime" /> Dictate it with <span className="text-white/85">Wispr Flow</span> — click in the box and hold your Wispr shortcut. Marathi, Hindi or English.
-            </p>
+            <VoiceInput
+              languages={languages}
+              onText={(phrase) => setText((cur) => (cur.trim() ? `${cur.trimEnd()} ${phrase}` : phrase))}
+              focusBox={() => {
+                const el = box.current;
+                if (!el) return;
+                el.focus();
+                el.setSelectionRange(el.value.length, el.value.length);
+              }}
+            />
           </Section>
 
           <Section n={5} title="Where and when">
